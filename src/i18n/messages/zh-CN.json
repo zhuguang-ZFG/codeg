@@ -2226,6 +2226,25 @@
         "submit": "提交",
         "submitError": "提交失败，请重试。"
       },
+      "planApproval": {
+        "titleFallback": "计划审批",
+        "badge": "计划",
+        "accept": "接受计划",
+        "reject": "拒绝",
+        "submitError": "提交失败，请重试。"
+      },
+      "cursorTask": {
+        "fallbackDescription": "子智能体任务更新",
+        "toastDescription": "子智能体：{subagent}",
+        "toastDescriptionWithDuration": "子智能体：{subagent} · {duration}"
+      },
+      "cursorGenerateImage": {
+        "fallbackDescription": "图片已生成",
+        "toastDescription": "图片生成完成",
+        "toastDescriptionWithPath": "已保存至 {path}",
+        "references": "{count} 张参考图",
+        "openFile": "打开文件"
+      },
       "feedbackCheckResult": {
         "count": "{count} 条反馈",
         "expand": "展开全部反馈",
@@ -2518,6 +2537,12 @@
       "permissionRequestDesc": "智能体请求操作权限时",
       "questionRequest": "智能体提问",
       "questionRequestDesc": "当智能体向你提问时",
+      "planApprovalRequest": "计划审批",
+      "planApprovalRequestDesc": "当 Cursor 提交计划待审批时",
+      "cursorTask": "子智能体任务",
+      "cursorTaskDesc": "当 Cursor 报告子智能体任务更新时",
+      "cursorGenerateImage": "图片生成",
+      "cursorGenerateImageDesc": "当 Cursor 报告生成图片时",
       "userPromptSent": "用户消息",
       "userPromptSentDesc": "当你发送消息时——通知中会包含消息内容",
       "saved": "事件过滤已更新。",

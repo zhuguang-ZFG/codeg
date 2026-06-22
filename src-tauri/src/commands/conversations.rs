@@ -270,6 +270,19 @@ pub async fn get_conversation(
             AgentType::OpenClaw => Box::new(OpenClawParser::new()),
             AgentType::Cline => Box::new(ClineParser::new()),
             AgentType::Hermes => Box::new(HermesParser::new()),
+            // ponytail: live ACP only — historical import when a parser lands.
+            AgentType::KimiCode => {
+                return Err(AppCommandError::not_found("Conversation not found")
+                    .with_detail("Kimi Code session import is not supported yet"))
+            }
+            AgentType::MimoCode => {
+                return Err(AppCommandError::not_found("Conversation not found")
+                    .with_detail("MiMo Code session import is not supported yet"))
+            }
+            AgentType::Cursor => {
+                return Err(AppCommandError::not_found("Conversation not found")
+                    .with_detail("Cursor CLI session import is not supported yet"))
+            }
         };
 
         parser
@@ -509,6 +522,10 @@ pub async fn get_folder_conversation_core(
                 AgentType::OpenClaw => Box::new(OpenClawParser::new()),
                 AgentType::Cline => Box::new(ClineParser::new()),
                 AgentType::Hermes => Box::new(HermesParser::new()),
+                // ponytail: ACP sessions have no on-disk parser yet — empty turns, UI loads live state.
+                AgentType::KimiCode => return Ok((vec![], None, None, None)),
+                AgentType::MimoCode => return Ok((vec![], None, None, None)),
+                AgentType::Cursor => return Ok((vec![], None, None, None)),
             };
             match parser.get_conversation(&eid) {
                 Ok(d) => Ok((d.turns, d.session_stats, None, d.summary.title)),

@@ -21,12 +21,20 @@ use sacp::schema::{
 use sacp::schema::{HttpHeader, McpServer, McpServerHttp, McpServerSse, McpServerStdio};
 use sacp::util::MatchDispatch;
 use sacp::{
-    on_receive_request, Agent, Client, ConnectionTo, Dispatch, Responder, SessionMessage,
-    UntypedMessage,
+    on_receive_notification, on_receive_request, Agent, Client, ConnectionTo, Dispatch, Handled,
+    Responder, SessionMessage, UntypedMessage,
 };
 use sacp_tokio::AcpAgent;
 use tokio::sync::{mpsc, RwLock};
 
+use crate::acp::cursor_ext::{
+    self, build_cursor_ask_response, build_cursor_plan_response, cursor_ask_cancelled_response,
+    cursor_ask_skipped_response, cursor_plan_cancelled_response, map_cursor_questions_to_specs,
+    map_cursor_todos_to_plan_entries, parse_cursor_ask, parse_cursor_create_plan,
+    parse_cursor_update_todos, parse_cursor_task, parse_cursor_generate_image,
+    cursor_subagent_type_label,
+    SessionCursorPlanAccess,
+};
 use crate::acp::error::AcpError;
 use crate::acp::file_system_runtime::{FileSystemRuntime, FileSystemRuntimeError};
 use crate::acp::registry::{self, AgentDistribution};
@@ -377,6 +385,78 @@ async fn build_agent(
                 ),
             )
         }
+        AgentDistribution::Path { cmd, args, env, .. } => {
+            let binary_path = crate::commands::acp::resolve_path_command(cmd).ok_or_else(|| {
+                AcpError::SdkNotInstalled(format!(
+                    "{} is not installed. Please install it in Agent Settings.",
+                    meta.name
+                ))
+            })?;
+
+            let binary_str = binary_path.to_string_lossy().to_string();
+            let binary_size = std::fs::metadata(&binary_path)
+                .map(|m| m.len())
+                .unwrap_or(0);
+            let mut server = McpServerStdio::new(meta.name, &binary_str);
+            let cmd_args: Vec<String> = args.iter().map(|a| (*a).to_string()).collect();
+            let cmd_args_for_log = cmd_args.clone();
+            if !cmd_args.is_empty() {
+                server = server.args(cmd_args);
+            }
+            let merged_env = merge_agent_env(env, runtime_env);
+            let env_key_list: Vec<&str> = merged_env.iter().map(|(k, _)| k.as_str()).collect();
+            if !merged_env.is_empty() {
+                let env_vars: Vec<sacp::schema::EnvVariable> = merged_env
+                    .iter()
+                    .map(|(k, v)| sacp::schema::EnvVariable::new(k, v))
+                    .collect();
+                server = server.env(env_vars);
+            }
+            tracing::info!(
+                "[ACP][{}] path_binary={} size={} platform={} args={:?} env_keys={:?}",
+                meta.name,
+                binary_str,
+                binary_size,
+                registry::current_platform(),
+                cmd_args_for_log,
+                env_key_list
+            );
+
+            let stdio_debug_enabled = std::env::var("CODEG_ACP_DEBUG")
+                .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                .unwrap_or(false);
+            let agent_name = meta.name.to_string();
+            Ok(
+                AcpAgent::new(sacp::schema::McpServer::Stdio(server)).with_debug(
+                    move |line, dir| {
+                        let (tag, enabled) = match dir {
+                            sacp_tokio::LineDirection::Stderr => ("stderr", true),
+                            sacp_tokio::LineDirection::Stdout => ("stdout", stdio_debug_enabled),
+                            sacp_tokio::LineDirection::Stdin => ("stdin", stdio_debug_enabled),
+                        };
+                        if !enabled {
+                            return;
+                        }
+                        const MAX: usize = 256;
+                        if line.len() > MAX {
+                            let head = line
+                                .char_indices()
+                                .take_while(|(i, _)| *i < MAX)
+                                .last()
+                                .map(|(i, c)| i + c.len_utf8())
+                                .unwrap_or(MAX);
+                            tracing::debug!(
+                                "[ACP][{agent_name}][{tag}] {}... <truncated {} bytes>",
+                                &line[..head],
+                                line.len() - head
+                            );
+                        } else {
+                            tracing::debug!("[ACP][{agent_name}][{tag}] {line}");
+                        }
+                    },
+                ),
+            )
+        }
         AgentDistribution::Uvx {
             package,
             cmd,
@@ -591,6 +671,7 @@ pub async fn spawn_agent_connection(
             // companion's ask socket to close (which a reparented/hard-killed
             // agent may never do); the dropped sender declines the tool cleanly.
             inj.questions.cancel_questions_by_parent(&conn_id).await;
+            inj.cursor_plans.cancel_plans_by_parent(&conn_id).await;
         }
 
         if let Err(e) = result {
@@ -987,6 +1068,8 @@ pub struct DelegationInjection {
     /// the delegation `broker.cancel_by_parent` cleanup. Shares the same backing
     /// `ConnectionManager` as the listener's question lookup.
     pub questions: Arc<dyn crate::acp::question::SessionQuestionAccess>,
+    /// Cursor `cursor/create_plan` registry for the connection loop + teardown.
+    pub cursor_plans: Arc<dyn crate::acp::cursor_ext::SessionCursorPlanAccess>,
 }
 
 /// Locate the `codeg-mcp` companion binary across the supported deployment
@@ -1268,6 +1351,143 @@ fn canonical_spec_to_mcp_server(name: &str, spec: &serde_json::Value) -> Result<
     }
 }
 
+async fn handle_cursor_untyped_request(
+    req: UntypedMessage,
+    responder: Responder<serde_json::Value>,
+    conn_id: &str,
+    questions: Option<Arc<dyn crate::acp::question::SessionQuestionAccess>>,
+    cursor_plans: Option<Arc<dyn SessionCursorPlanAccess>>,
+) -> Result<(), sacp::Error> {
+    match req.method() {
+        "cursor/ask_question" => {
+            let Some(questions) = questions else {
+                return responder.respond(cursor_ask_skipped_response(
+                    "Interactive questions are unavailable in this session",
+                ));
+            };
+            let parsed = match parse_cursor_ask(req.params()) {
+                Ok(r) => r,
+                Err(e) => return responder.respond(cursor_ask_skipped_response(&e)),
+            };
+            let specs = match map_cursor_questions_to_specs(&parsed) {
+                Ok(s) => s,
+                Err(e) => return responder.respond(cursor_ask_skipped_response(&e)),
+            };
+            let Some(reg) = questions.register_question(conn_id, specs).await else {
+                return responder.respond(cursor_ask_skipped_response(
+                    "Another question is already pending",
+                ));
+            };
+            let outcome = match reg.answer_rx.await {
+                Ok(o) => o,
+                Err(_) => return responder.respond(cursor_ask_cancelled_response()),
+            };
+            responder.respond(build_cursor_ask_response(&parsed, outcome))
+        }
+        "cursor/create_plan" => {
+            let Some(cursor_plans) = cursor_plans else {
+                return responder.respond(build_cursor_plan_response(
+                    &cursor_ext::PlanAnswer {
+                        accepted: true,
+                        ..Default::default()
+                    },
+                ));
+            };
+            let parsed = match parse_cursor_create_plan(req.params()) {
+                Ok(r) => r,
+                Err(e) => {
+                    tracing::warn!("[ACP][cursor] invalid create_plan: {e}");
+                    return responder.respond(build_cursor_plan_response(
+                        &cursor_ext::PlanAnswer {
+                            accepted: false,
+                            reason: Some(e),
+                            ..Default::default()
+                        },
+                    ));
+                }
+            };
+            let Some(reg) = cursor_plans.register_plan(conn_id, parsed).await else {
+                return responder.respond(build_cursor_plan_response(
+                    &cursor_ext::PlanAnswer {
+                        accepted: false,
+                        reason: Some("Another plan is already pending".into()),
+                        ..Default::default()
+                    },
+                ));
+            };
+            let response = match reg.answer_rx.await {
+                Ok(v) => v,
+                Err(_) => cursor_plan_cancelled_response(),
+            };
+            responder.respond(response)
+        }
+        _ => Ok(()),
+    }
+}
+
+async fn handle_cursor_untyped_notification(
+    notif: UntypedMessage,
+    state: &Arc<RwLock<SessionState>>,
+    emitter: &EventEmitter,
+) -> Result<(), sacp::Error> {
+    match notif.method() {
+        "cursor/update_todos" => {
+            match parse_cursor_update_todos(notif.params()) {
+                Ok(update) => {
+                    emit_with_state(
+                        state,
+                        emitter,
+                        AcpEvent::PlanUpdate {
+                            entries: map_cursor_todos_to_plan_entries(&update.todos),
+                        },
+                    )
+                    .await;
+                }
+                Err(e) => tracing::warn!("[ACP][cursor] invalid update_todos: {e}"),
+            }
+            Ok(())
+        }
+        "cursor/task" => {
+            match parse_cursor_task(notif.params()) {
+                Ok(task) => {
+                    emit_with_state(
+                        state,
+                        emitter,
+                        AcpEvent::CursorTask {
+                            description: task.description,
+                            subagent_type: cursor_subagent_type_label(&task.subagent_type),
+                            duration_ms: task.duration_ms,
+                            agent_id: task.agent_id,
+                        },
+                    )
+                    .await;
+                }
+                Err(e) => tracing::warn!("[ACP][cursor] invalid task: {e}"),
+            }
+            Ok(())
+        }
+        "cursor/generate_image" => {
+            match parse_cursor_generate_image(notif.params()) {
+                Ok(image) => {
+                    emit_with_state(
+                        state,
+                        emitter,
+                        AcpEvent::CursorGenerateImage {
+                            description: image.description,
+                            file_path: image.file_path,
+                            reference_image_paths: image.reference_image_paths,
+                        },
+                    )
+                    .await;
+                }
+                Err(e) => tracing::warn!("[ACP][cursor] invalid generate_image: {e}"),
+            }
+            Ok(())
+        }
+        _ => Ok(()),
+    }
+}
+
 /// The main ACP connection loop.
 #[allow(clippy::too_many_arguments)]
 #[tracing::instrument(
@@ -1307,6 +1527,15 @@ async fn run_connection(
     let emitter_clone = emitter.clone();
     let perms = pending_perms.clone();
     let state_outer = Arc::clone(&state);
+    let cursor_questions = delegation_injection
+        .as_ref()
+        .map(|inj| inj.questions.clone());
+    let cursor_plans = delegation_injection
+        .as_ref()
+        .map(|inj| inj.cursor_plans.clone());
+    let cursor_conn_id = Arc::new(connection_id.clone());
+    let cursor_state = Arc::clone(&state);
+    let cursor_emitter = emitter.clone();
 
     Client
         .builder()
@@ -1417,6 +1646,50 @@ async fn run_connection(
                 }
             },
             on_receive_request!(),
+        )
+        .on_receive_request(
+            {
+                let conn_id = Arc::clone(&cursor_conn_id);
+                let questions = cursor_questions.clone();
+                let plans = cursor_plans.clone();
+                async move |req: UntypedMessage,
+                            responder: Responder<serde_json::Value>,
+                            _cx: ConnectionTo<Agent>| {
+                    if !req.method().starts_with("cursor/") {
+                        return Ok(Handled::No {
+                            message: (req, responder),
+                            retry: false,
+                        });
+                    }
+                    handle_cursor_untyped_request(
+                        req,
+                        responder,
+                        conn_id.as_str(),
+                        questions.clone(),
+                        plans.clone(),
+                    )
+                    .await?;
+                    Ok(Handled::Yes)
+                }
+            },
+            on_receive_request!(),
+        )
+        .on_receive_notification(
+            {
+                let state = Arc::clone(&cursor_state);
+                let emitter = cursor_emitter.clone();
+                async move |notif: UntypedMessage, cx: ConnectionTo<Agent>| {
+                    if !notif.method().starts_with("cursor/") {
+                        return Ok(Handled::No {
+                            message: (notif, cx),
+                            retry: false,
+                        });
+                    }
+                    handle_cursor_untyped_notification(notif, &state, &emitter).await?;
+                    Ok(Handled::Yes)
+                }
+            },
+            on_receive_notification!(),
         )
         .connect_with(agent, async move |cx| -> Result<(), sacp::Error> {
             let state = state_outer;
@@ -4599,6 +4872,18 @@ mod tests {
             async fn cancel_question(&self, _parent_connection_id: &str, _question_id: &str) {}
             async fn cancel_questions_by_parent(&self, _parent_connection_id: &str) {}
         }
+        struct NoPlans;
+        #[async_trait::async_trait]
+        impl crate::acp::cursor_ext::SessionCursorPlanAccess for NoPlans {
+            async fn register_plan(
+                &self,
+                _parent_connection_id: &str,
+                _request: crate::acp::cursor_ext::CursorCreatePlanRequest,
+            ) -> Option<crate::acp::cursor_ext::RegisteredPlan> {
+                None
+            }
+            async fn cancel_plans_by_parent(&self, _parent_connection_id: &str) {}
+        }
         let injection = DelegationInjection {
             broker,
             tokens: Arc::new(TokenRegistry::default()),
@@ -4608,6 +4893,8 @@ mod tests {
             sessions: crate::acp::session_info::SessionInfoRuntimeConfig::new(),
             questions: Arc::new(NoQuestions)
                 as Arc<dyn crate::acp::question::SessionQuestionAccess>,
+            cursor_plans: Arc::new(NoPlans)
+                as Arc<dyn crate::acp::cursor_ext::SessionCursorPlanAccess>,
         };
 
         let mut servers: Vec<McpServer> = Vec::new();

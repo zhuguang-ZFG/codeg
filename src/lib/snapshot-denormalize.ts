@@ -7,6 +7,7 @@ import type {
   LiveMessage as WireLiveMessage,
   LiveSessionSnapshot,
   PendingQuestionState,
+  PendingPlanState,
   PromptCapabilitiesInfo,
   SessionConfigOptionInfo,
   SessionModeStateInfo,
@@ -49,6 +50,8 @@ export interface SnapshotPatch {
    *  no question is pending. (Distinct from the frontend-only free-text
    *  `pendingQuestion`, which is NOT in the snapshot.) */
   pendingAskQuestion: PendingQuestionState | null
+  /** Cursor CLI `cursor/create_plan` awaiting approval. */
+  pendingPlan: PendingPlanState | null
   /** In-flight user prompt carried by the snapshot, so a client attaching
    *  mid-turn can synthesize the user turn (Bug-2 / cross-client viewing).
    *  `null` when no turn is in flight. */
@@ -106,6 +109,7 @@ export function denormalizeSnapshot(wire: LiveSessionSnapshot): SnapshotPatch {
       : null,
     // The snapshot shape already matches PendingQuestionState; pass through.
     pendingAskQuestion: wire.pending_question ?? null,
+    pendingPlan: wire.pending_plan ?? null,
     pendingUserMessage: wire.pending_user_message
       ? {
           messageId: wire.pending_user_message.message_id,

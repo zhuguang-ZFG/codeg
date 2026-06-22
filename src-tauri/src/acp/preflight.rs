@@ -70,6 +70,7 @@ pub async fn run_preflight(agent_type: AgentType) -> PreflightResult {
             system_cmd,
             ..
         } => check_uv_environment(*uv_required, *system_cmd).await,
+        AgentDistribution::Path { cmd, .. } => check_path_environment(cmd).await,
     };
 
     let passed = checks
@@ -399,6 +400,32 @@ fn build_uv_version_check(current: Option<&str>, required: &str) -> CheckItem {
             message: format!("Cannot parse uv version; recommended >={required}"),
             fixes: vec![],
         },
+    }
+}
+
+async fn check_path_environment(cmd: &str) -> Vec<CheckItem> {
+    if crate::commands::acp::resolve_path_command(cmd).is_some() {
+        vec![CheckItem {
+            check_id: "path_cli_available".into(),
+            label: "CLI".into(),
+            status: CheckStatus::Pass,
+            message: format!("`{cmd}` is available"),
+            fixes: vec![],
+        }]
+    } else {
+        vec![CheckItem {
+            check_id: "path_cli_available".into(),
+            label: "CLI".into(),
+            status: CheckStatus::Fail,
+            message: format!(
+                "`{cmd}` is not installed. Install Cursor CLI from Agent Settings, then run `agent login`."
+            ),
+            fixes: vec![FixAction {
+                label: "Installation guide".into(),
+                kind: FixActionKind::OpenUrl,
+                payload: "https://cursor.com/docs/cli/installation".into(),
+            }],
+        }]
     }
 }
 

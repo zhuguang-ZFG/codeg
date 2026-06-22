@@ -2226,6 +2226,25 @@
         "submit": "제출",
         "submitError": "제출하지 못했습니다. 다시 시도해 주세요."
       },
+      "planApproval": {
+        "titleFallback": "계획 승인",
+        "badge": "계획",
+        "accept": "계획 승인",
+        "reject": "거부",
+        "submitError": "제출하지 못했습니다. 다시 시도해 주세요."
+      },
+      "cursorTask": {
+        "fallbackDescription": "하위 에이전트 작업 업데이트",
+        "toastDescription": "하위 에이전트: {subagent}",
+        "toastDescriptionWithDuration": "하위 에이전트: {subagent} · {duration}"
+      },
+      "cursorGenerateImage": {
+        "fallbackDescription": "이미지 생성됨",
+        "toastDescription": "이미지 생성 완료",
+        "toastDescriptionWithPath": "저장 위치: {path}",
+        "references": "참조 이미지 {count}개",
+        "openFile": "파일 열기"
+      },
       "feedbackCheckResult": {
         "count": "피드백 {count}개",
         "expand": "모든 피드백 표시",
@@ -2506,6 +2525,12 @@
       "permissionRequestDesc": "에이전트가 작업 권한을 요청할 때",
       "questionRequest": "에이전트 질문",
       "questionRequestDesc": "에이전트가 질문할 때",
+      "planApprovalRequest": "계획 승인",
+      "planApprovalRequestDesc": "Cursor가 계획 승인을 요청할 때",
+      "cursorTask": "하위 에이전트 작업",
+      "cursorTaskDesc": "Cursor가 하위 에이전트 작업을 보고할 때",
+      "cursorGenerateImage": "이미지 생성",
+      "cursorGenerateImageDesc": "Cursor가 생성된 이미지를 보고할 때",
       "userPromptSent": "사용자 메시지",
       "userPromptSentDesc": "메시지를 보낼 때 — 알림에 메시지 내용이 포함됩니다",
       "saved": "이벤트 필터가 업데이트되었습니다.",

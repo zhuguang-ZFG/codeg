@@ -2226,6 +2226,25 @@
         "submit": "Envoyer",
         "submitError": "Échec de l'envoi. Veuillez réessayer."
       },
+      "planApproval": {
+        "titleFallback": "Approbation du plan",
+        "badge": "Plan",
+        "accept": "Accepter le plan",
+        "reject": "Refuser",
+        "submitError": "Échec de l'envoi. Veuillez réessayer."
+      },
+      "cursorTask": {
+        "fallbackDescription": "Mise à jour de tâche de sous-agent",
+        "toastDescription": "Sous-agent : {subagent}",
+        "toastDescriptionWithDuration": "Sous-agent : {subagent} · {duration}"
+      },
+      "cursorGenerateImage": {
+        "fallbackDescription": "Image générée",
+        "toastDescription": "Génération d'image terminée",
+        "toastDescriptionWithPath": "Enregistrée dans {path}",
+        "references": "{count} image(s) de référence",
+        "openFile": "Ouvrir le fichier"
+      },
       "feedbackCheckResult": {
         "count": "{count, plural, =1 {1 retour} other {# retours}}",
         "expand": "Afficher tous les retours",
@@ -2506,6 +2525,12 @@
       "permissionRequestDesc": "Lorsqu'un agent demande une autorisation",
       "questionRequest": "Question de l'agent",
       "questionRequestDesc": "Quand un agent vous pose une question",
+      "planApprovalRequest": "Approbation du plan",
+      "planApprovalRequestDesc": "Quand Cursor soumet un plan pour approbation",
+      "cursorTask": "Tâche de sous-agent",
+      "cursorTaskDesc": "Quand Cursor signale une tâche de sous-agent",
+      "cursorGenerateImage": "Image générée",
+      "cursorGenerateImageDesc": "Quand Cursor signale une image générée",
       "userPromptSent": "Message de l'utilisateur",
       "userPromptSentDesc": "Lorsque vous envoyez un message (le texte du message est inclus dans la notification)",
       "saved": "Filtre d'événements mis à jour.",

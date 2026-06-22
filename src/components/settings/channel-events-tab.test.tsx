@@ -84,6 +84,9 @@ describe("ChannelEventsTab event filter (opt-in user_prompt_sent)", () => {
         "error",
         "permission_request",
         "question_request",
+        "plan_approval_request",
+        "cursor_task",
+        "cursor_generate_image",
         "user_prompt_sent",
       ])
     )
@@ -95,6 +98,9 @@ describe("ChannelEventsTab event filter (opt-in user_prompt_sent)", () => {
       "error",
       "permission_request",
       "question_request",
+      "plan_approval_request",
+      "cursor_task",
+      "cursor_generate_image",
       "user_prompt_sent",
     ])
     renderTab()
@@ -135,6 +141,9 @@ describe("ChannelEventsTab load failure", () => {
       "error",
       "permission_request",
       "question_request",
+      "plan_approval_request",
+      "cursor_task",
+      "cursor_generate_image",
       "user_prompt_sent",
     ])
     renderTab()

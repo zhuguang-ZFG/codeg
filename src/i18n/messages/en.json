@@ -2226,6 +2226,25 @@
         "submit": "Submit",
         "submitError": "Couldn't submit. Please try again."
       },
+      "planApproval": {
+        "titleFallback": "Plan approval",
+        "badge": "Plan",
+        "accept": "Accept plan",
+        "reject": "Reject",
+        "submitError": "Couldn't submit. Please try again."
+      },
+      "cursorTask": {
+        "fallbackDescription": "Subagent task update",
+        "toastDescription": "Subagent: {subagent}",
+        "toastDescriptionWithDuration": "Subagent: {subagent} · {duration}"
+      },
+      "cursorGenerateImage": {
+        "fallbackDescription": "Image generated",
+        "toastDescription": "Image generation completed",
+        "toastDescriptionWithPath": "Saved to {path}",
+        "references": "{count, plural, =1 {1 reference image} other {# reference images}}",
+        "openFile": "Open file"
+      },
       "feedbackCheckResult": {
         "count": "{count, plural, =1 {1 feedback note} other {# feedback notes}}",
         "expand": "Show all feedback",
@@ -2518,6 +2537,12 @@
       "permissionRequestDesc": "When an agent requests permission to act",
       "questionRequest": "Agent Question",
       "questionRequestDesc": "When an agent asks you a question",
+      "planApprovalRequest": "Plan Approval",
+      "planApprovalRequestDesc": "When Cursor submits a plan for your approval",
+      "cursorTask": "Subagent Task",
+      "cursorTaskDesc": "When Cursor reports a subagent task update",
+      "cursorGenerateImage": "Image Generated",
+      "cursorGenerateImageDesc": "When Cursor reports a generated image",
       "userPromptSent": "User Message",
       "userPromptSentDesc": "When you send a message — the message text is included in the notification",
       "saved": "Event filter updated.",

@@ -197,6 +197,110 @@ pub(crate) fn resolve_command_on_path(cmd: &str) -> Option<PathBuf> {
     which::which(cmd).ok()
 }
 
+/// Resolve a PATH-installed CLI binary, probing `~/.local/bin` when the GUI
+/// process does not inherit the user's shell PATH (common for Cursor's `agent`).
+pub(crate) fn resolve_path_command(cmd: &str) -> Option<PathBuf> {
+    if let Some(path) = resolve_command_on_path(cmd) {
+        return Some(path);
+    }
+    let home = home_dir_or_default();
+    let exe = if cfg!(windows) {
+        format!("{cmd}.exe")
+    } else {
+        cmd.to_string()
+    };
+    let local_bin = home.join(".local").join("bin").join(exe);
+    local_bin.is_file().then_some(local_bin)
+}
+
+async fn detect_path_agent_version(cmd: &str) -> Option<String> {
+    let path = resolve_path_command(cmd)?;
+    let output = crate::process::tokio_command(&path)
+        .arg("--version")
+        .output()
+        .await
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    normalize_version_candidate(text.split_whitespace().last().unwrap_or(&text))
+}
+
+async fn install_path_agent_cli(
+    agent_name: &str,
+    task_id: &str,
+    emitter: &EventEmitter,
+) -> Result<(), AcpError> {
+    if cfg!(windows) {
+        emit_agent_install_event(
+            emitter,
+            task_id,
+            AgentInstallEventKind::Log,
+            "Running Cursor CLI installer (PowerShell)...".to_string(),
+        );
+        let output = crate::process::tokio_command("powershell")
+            .args([
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "irm 'https://cursor.com/install?win32=true' | iex",
+            ])
+            .output()
+            .await
+            .map_err(|e| AcpError::SpawnFailed(format!("failed to run installer: {e}")))?;
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        for line in stderr.lines().chain(stdout.lines()) {
+            if !line.trim().is_empty() {
+                emit_agent_install_event(
+                    emitter,
+                    task_id,
+                    AgentInstallEventKind::Log,
+                    line.to_string(),
+                );
+            }
+        }
+        if !output.status.success() {
+            return Err(AcpError::protocol(format!(
+                "Cursor CLI install failed for {agent_name}"
+            )));
+        }
+        Ok(())
+    } else {
+        emit_agent_install_event(
+            emitter,
+            task_id,
+            AgentInstallEventKind::Log,
+            "$ curl https://cursor.com/install -fsS | bash".to_string(),
+        );
+        let output = crate::process::tokio_command("bash")
+            .args(["-c", "curl https://cursor.com/install -fsS | bash"])
+            .output()
+            .await
+            .map_err(|e| AcpError::SpawnFailed(format!("failed to run installer: {e}")))?;
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        for line in stderr.lines().chain(stdout.lines()) {
+            if !line.trim().is_empty() {
+                emit_agent_install_event(
+                    emitter,
+                    task_id,
+                    AgentInstallEventKind::Log,
+                    line.to_string(),
+                );
+            }
+        }
+        if !output.status.success() {
+            return Err(AcpError::protocol(format!(
+                "Cursor CLI install failed for {agent_name}"
+            )));
+        }
+        Ok(())
+    }
+}
+
 /// Resolve the `uvx` (uv tool runner) executable used to launch Python ACP
 /// agents (e.g. Hermes). Checks PATH first (respecting a user's own `uv`),
 /// then codeg's managed uv cache, then the common install locations the
@@ -495,6 +599,16 @@ pub(crate) async fn verify_agent_installed(agent_type: AgentType) -> Result<(), 
                 )))
             }
         }
+        registry::AgentDistribution::Path { cmd, .. } => {
+            if resolve_path_command(cmd).is_some() {
+                Ok(())
+            } else {
+                Err(AcpError::SdkNotInstalled(format!(
+                    "{} is not installed. Please install it in Agent Settings.",
+                    meta.name
+                )))
+            }
+        }
     }
 }
 
@@ -566,6 +680,7 @@ async fn detect_local_version(agent_type: AgentType) -> Option<String> {
                 .flatten()
         }
         registry::AgentDistribution::Uvx { .. } => binary_cache::uvx_prepared_version(agent_type),
+        registry::AgentDistribution::Path { cmd, .. } => detect_path_agent_version(cmd).await,
     }
 }
 
@@ -2997,6 +3112,10 @@ pub(crate) fn skill_storage_spec(agent_type: AgentType) -> Option<SkillStorageSp
             global_dirs: vec![hermes_home_dir().join("skills")],
             project_rel_dirs: vec![],
         }),
+        // ponytail: Kimi Code manages skills/MCP via `kimi` CLI — no codeg mirror yet.
+        AgentType::KimiCode => None,
+        AgentType::MimoCode => None,
+        AgentType::Cursor => None,
     }
 }
 
@@ -3721,6 +3840,11 @@ fn cascade_update_agent_config(
             persist_agent_local_config_json(agent_type, Some(&patch_str))?;
         }
         AgentType::Cline => {}
+        // ponytail: auth via `kimi login` in the CLI, not codeg provider cascade.
+        AgentType::KimiCode => {}
+        AgentType::MimoCode => {}
+        // ponytail: auth via `agent login` in the CLI, not codeg provider cascade.
+        AgentType::Cursor => {}
     }
     Ok(())
 }
@@ -4190,6 +4314,17 @@ pub async fn acp_answer_question(
 
 #[cfg(feature = "tauri-runtime")]
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn acp_answer_plan(
+    connection_id: String,
+    plan_id: String,
+    answer: crate::acp::cursor_ext::PlanAnswer,
+    manager: State<'_, ConnectionManager>,
+) -> Result<(), AcpError> {
+    manager.answer_plan(&connection_id, &plan_id, answer).await
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn acp_disconnect(
     connection_id: String,
     manager: State<'_, ConnectionManager>,
@@ -4368,6 +4503,14 @@ pub(crate) async fn acp_get_agent_status_core(
             uvx_agent_launchable(*system_cmd),
             binary_cache::uvx_prepared_version(agent_type),
         ),
+        registry::AgentDistribution::Path { cmd, .. } => {
+            let detected = if resolve_path_command(cmd).is_some() {
+                detect_path_agent_version(cmd).await
+            } else {
+                None
+            };
+            (true, detected)
+        }
     };
 
     Ok(crate::acp::types::AcpAgentStatus {
@@ -4441,6 +4584,14 @@ pub(crate) async fn acp_list_agents_core(db: &AppDatabase) -> Result<Vec<AcpAgen
                 "uvx",
                 binary_cache::uvx_prepared_version(agent_type),
             ),
+            registry::AgentDistribution::Path { cmd, .. } => {
+                let detected = if resolve_path_command(cmd).is_some() {
+                    detect_path_agent_version(cmd).await
+                } else {
+                    None
+                };
+                (true, "path", detected)
+            }
         };
 
         let mut env = setting
@@ -4472,8 +4623,8 @@ pub(crate) async fn acp_list_agents_core(db: &AppDatabase) -> Result<Vec<AcpAgen
             }
         }
         let sort_order = setting.map(|m| m.sort_order).unwrap_or(idx as i32);
-        // Persist detected version to DB for binary agents (npx written during install/upgrade)
-        if dist_type == "binary" {
+        // Persist detected version to DB for binary/path agents (npx written during install/upgrade)
+        if dist_type == "binary" || dist_type == "path" {
             let _ = agent_setting_service::set_installed_version(
                 &db.conn,
                 agent_type,
@@ -5244,6 +5395,9 @@ pub(crate) async fn acp_download_agent_binary_core(
         registry::AgentDistribution::Uvx { .. } => Err(AcpError::protocol(
             "download is only supported for binary agents",
         )),
+        registry::AgentDistribution::Path { .. } => Err(AcpError::protocol(
+            "download is only supported for binary agents",
+        )),
     };
 
     match &result {
@@ -5360,7 +5514,7 @@ pub(crate) async fn acp_detect_agent_local_version_core(
     // for npx we keep the DB value as a best-effort fallback.)
     if matches!(
         registry::get_agent_meta(agent_type).distribution,
-        registry::AgentDistribution::Binary { .. }
+        registry::AgentDistribution::Binary { .. } | registry::AgentDistribution::Path { .. }
     ) {
         let _ = agent_setting_service::set_installed_version(conn, agent_type, None).await;
         return Ok(None);
@@ -5515,6 +5669,52 @@ pub(crate) async fn acp_prepare_npx_agent_core(
             emit_acp_agents_updated(emitter, "uvx_prepared", Some(agent_type));
             Ok(resolved)
         }
+        registry::AgentDistribution::Path { cmd, version, .. } => {
+            let default = agent_setting_service::AgentDefaultInput {
+                agent_type,
+                registry_id: registry::registry_id_for(agent_type).to_string(),
+                default_sort_order: i32::MAX / 2,
+            };
+            agent_setting_service::ensure_defaults(&db.conn, &[default])
+                .await
+                .map_err(|e| AcpError::protocol(e.to_string()))?;
+
+            if resolve_path_command(cmd).is_none() {
+                install_path_agent_cli(meta.name, &task_id, emitter).await?;
+            } else {
+                emit_agent_install_event(
+                    emitter,
+                    &task_id,
+                    AgentInstallEventKind::Log,
+                    format!("{} CLI already present, verifying version...", meta.name),
+                );
+            }
+
+            emit_agent_install_event(
+                emitter,
+                &task_id,
+                AgentInstallEventKind::Log,
+                "Detecting installed version...",
+            );
+            let resolved = detect_path_agent_version(cmd)
+                .await
+                .or_else(|| normalize_version_candidate(version))
+                .ok_or_else(|| {
+                    AcpError::protocol(
+                        "install succeeded but failed to determine local CLI version",
+                    )
+                })?;
+
+            agent_setting_service::set_installed_version(
+                &db.conn,
+                agent_type,
+                Some(resolved.clone()),
+            )
+            .await
+            .map_err(|e| AcpError::protocol(e.to_string()))?;
+            emit_acp_agents_updated(emitter, "path_prepared", Some(agent_type));
+            Ok(resolved)
+        }
     };
 
     match &result {
@@ -5606,6 +5806,7 @@ pub(crate) async fn acp_uninstall_agent_core(
             registry::AgentDistribution::Uvx { .. } => {
                 binary_cache::clear_uvx_agent_prepared(agent_type)?;
             }
+            registry::AgentDistribution::Path { .. } => {}
         }
 
         agent_setting_service::set_installed_version(&db.conn, agent_type, None)

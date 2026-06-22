@@ -268,6 +268,191 @@ pub fn question_label(lang: Lang) -> &'static str {
     }
 }
 
+// ── Plan approval (Cursor create_plan global event push) ──
+
+pub fn plan_approval_request_title(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "计划审批",
+        Lang::ZhTw => "計畫審批",
+        Lang::Ja => "プラン承認",
+        Lang::Ko => "계획 승인",
+        Lang::Es => "Aprobación del plan",
+        Lang::De => "Planfreigabe",
+        Lang::Fr => "Approbation du plan",
+        Lang::Pt => "Aprovação do plano",
+        Lang::Ar => "الموافقة على الخطة",
+        Lang::En => "Plan Approval",
+    }
+}
+
+pub fn plan_approval_request_body(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "Cursor 智能体提交了一个计划，请在 Codeg 中审批。",
+        Lang::ZhTw => "Cursor 智慧代理提交了一個計畫，請在 Codeg 中審批。",
+        Lang::Ja => "Cursor エージェントがプランを提出しました。Codeg で承認してください。",
+        Lang::Ko => "Cursor 에이전트가 계획을 제출했습니다. Codeg에서 승인하세요.",
+        Lang::Es => "El agente de Cursor envió un plan. Apruébalo en Codeg.",
+        Lang::De => "Der Cursor-Agent hat einen Plan eingereicht. Bitte in Codeg freigeben.",
+        Lang::Fr => "L'agent Cursor a soumis un plan. Approuvez-le dans Codeg.",
+        Lang::Pt => "O agente Cursor enviou um plano. Aprove no Codeg.",
+        Lang::Ar => "قدّم وكيل Cursor خطة. يرجى الموافقة عليها في Codeg.",
+        Lang::En => "A Cursor agent submitted a plan. Review it in Codeg.",
+    }
+}
+
+pub fn plan_name_label(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "名称",
+        Lang::ZhTw => "名稱",
+        Lang::Ja => "名前",
+        Lang::Ko => "이름",
+        Lang::Es => "Nombre",
+        Lang::De => "Name",
+        Lang::Fr => "Nom",
+        Lang::Pt => "Nome",
+        Lang::Ar => "الاسم",
+        Lang::En => "Name",
+    }
+}
+
+pub fn plan_overview_label(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "概述",
+        Lang::ZhTw => "概述",
+        Lang::Ja => "概要",
+        Lang::Ko => "개요",
+        Lang::Es => "Resumen",
+        Lang::De => "Überblick",
+        Lang::Fr => "Aperçu",
+        Lang::Pt => "Visão geral",
+        Lang::Ar => "نظرة عامة",
+        Lang::En => "Overview",
+    }
+}
+
+pub fn plan_body_label(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "计划",
+        Lang::ZhTw => "計畫",
+        Lang::Ja => "プラン",
+        Lang::Ko => "계획",
+        Lang::Es => "Plan",
+        Lang::De => "Plan",
+        Lang::Fr => "Plan",
+        Lang::Pt => "Plano",
+        Lang::Ar => "الخطة",
+        Lang::En => "Plan",
+    }
+}
+
+// ── Cursor subagent task (cursor/task global event push) ──
+
+pub fn cursor_task_title(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "子智能体任务",
+        Lang::ZhTw => "子智慧代理任務",
+        Lang::Ja => "サブエージェントタスク",
+        Lang::Ko => "하위 에이전트 작업",
+        Lang::Es => "Tarea de subagente",
+        Lang::De => "Subagenten-Aufgabe",
+        Lang::Fr => "Tâche de sous-agent",
+        Lang::Pt => "Tarefa de subagente",
+        Lang::Ar => "مهمة الوكيل الفرعي",
+        Lang::En => "Subagent Task",
+    }
+}
+
+pub fn cursor_task_subagent_label(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "类型",
+        Lang::ZhTw => "類型",
+        Lang::Ja => "種類",
+        Lang::Ko => "유형",
+        Lang::Es => "Tipo",
+        Lang::De => "Typ",
+        Lang::Fr => "Type",
+        Lang::Pt => "Tipo",
+        Lang::Ar => "النوع",
+        Lang::En => "Type",
+    }
+}
+
+pub fn cursor_task_duration_label(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "耗时",
+        Lang::ZhTw => "耗時",
+        Lang::Ja => "所要時間",
+        Lang::Ko => "소요 시간",
+        Lang::Es => "Duración",
+        Lang::De => "Dauer",
+        Lang::Fr => "Durée",
+        Lang::Pt => "Duração",
+        Lang::Ar => "المدة",
+        Lang::En => "Duration",
+    }
+}
+
+pub fn cursor_task_duration_value(lang: Lang, ms: u64) -> String {
+    let secs = ms as f64 / 1000.0;
+    match lang {
+        Lang::ZhCn => format!("{secs:.1} 秒"),
+        Lang::ZhTw => format!("{secs:.1} 秒"),
+        Lang::Ja => format!("{secs:.1} 秒"),
+        Lang::Ko => format!("{secs:.1}초"),
+        Lang::Es => format!("{secs:.1} s"),
+        Lang::De => format!("{secs:.1} s"),
+        Lang::Fr => format!("{secs:.1} s"),
+        Lang::Pt => format!("{secs:.1} s"),
+        Lang::Ar => format!("{secs:.1} ث"),
+        Lang::En => format!("{secs:.1}s"),
+    }
+}
+
+pub fn cursor_generate_image_title(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "图片生成",
+        Lang::ZhTw => "圖片生成",
+        Lang::Ja => "画像生成",
+        Lang::Ko => "이미지 생성",
+        Lang::Es => "Generación de imagen",
+        Lang::De => "Bildgenerierung",
+        Lang::Fr => "Génération d'image",
+        Lang::Pt => "Geração de imagem",
+        Lang::Ar => "إنشاء صورة",
+        Lang::En => "Image Generated",
+    }
+}
+
+pub fn cursor_generate_image_path_label(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "路径",
+        Lang::ZhTw => "路徑",
+        Lang::Ja => "パス",
+        Lang::Ko => "경로",
+        Lang::Es => "Ruta",
+        Lang::De => "Pfad",
+        Lang::Fr => "Chemin",
+        Lang::Pt => "Caminho",
+        Lang::Ar => "المسار",
+        Lang::En => "Path",
+    }
+}
+
+pub fn cursor_generate_image_references_label(lang: Lang) -> &'static str {
+    match lang {
+        Lang::ZhCn => "参考图",
+        Lang::ZhTw => "參考圖",
+        Lang::Ja => "参照画像",
+        Lang::Ko => "참조 이미지",
+        Lang::Es => "Referencias",
+        Lang::De => "Referenzen",
+        Lang::Fr => "Références",
+        Lang::Pt => "Referências",
+        Lang::Ar => "مراجع",
+        Lang::En => "References",
+    }
+}
+
 // ── Daily report ──
 
 pub fn daily_report_title(lang: Lang) -> &'static str {

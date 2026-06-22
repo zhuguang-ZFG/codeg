@@ -29,6 +29,7 @@ import type {
   LiveSessionSnapshot,
   FeedbackItem,
   QuestionAnswer,
+  PlanAnswer,
   AcpAgentInfo,
   AcpAgentStatus,
   AgentSkillScope,
@@ -244,6 +245,18 @@ export async function acpAnswerQuestion(
   return getTransport().call("acp_answer_question", {
     connectionId,
     questionId,
+    answer,
+  })
+}
+
+export async function acpAnswerPlan(
+  connectionId: string,
+  planId: string,
+  answer: PlanAnswer
+): Promise<void> {
+  return getTransport().call("acp_answer_plan", {
+    connectionId,
+    planId,
     answer,
   })
 }

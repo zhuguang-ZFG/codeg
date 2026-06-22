@@ -6,6 +6,9 @@ export type AgentType =
   | "open_claw"
   | "cline"
   | "hermes"
+  | "kimi_code"
+  | "mimo_code"
+  | "cursor"
 
 export type AppErrorCode =
   | "invalid_input"
@@ -437,6 +440,9 @@ export const AGENT_DISPLAY_ORDER: AgentType[] = [
   "open_claw",
   "cline",
   "hermes",
+  "kimi_code",
+  "mimo_code",
+  "cursor",
 ]
 
 const AGENT_DISPLAY_ORDER_INDEX = new Map(
@@ -457,6 +463,9 @@ export const ALL_AGENT_TYPES: AgentType[] = [
   "open_claw",
   "cline",
   "hermes",
+  "kimi_code",
+  "mimo_code",
+  "cursor",
 ]
 
 export const MODEL_PROVIDER_AGENT_TYPES: AgentType[] = [
@@ -744,6 +753,9 @@ export const AGENT_LABELS: Record<AgentType, string> = {
   open_claw: "OpenClaw",
   cline: "Cline",
   hermes: "Hermes Agent",
+  kimi_code: "Kimi Code",
+  mimo_code: "MiMo Code",
+  cursor: "Cursor CLI",
 }
 
 export const AGENT_COLORS: Record<AgentType, string> = {
@@ -754,6 +766,9 @@ export const AGENT_COLORS: Record<AgentType, string> = {
   open_claw: "bg-emerald-600",
   cline: "bg-purple-500",
   hermes: "bg-amber-500",
+  kimi_code: "bg-sky-600",
+  mimo_code: "bg-orange-600",
+  cursor: "bg-violet-600",
 }
 
 // ACP connection status (matches Rust ConnectionStatus)
@@ -842,6 +857,36 @@ export interface QuestionAnswerItem {
 export interface QuestionAnswer {
   answers: QuestionAnswerItem[]
   declined: boolean
+}
+
+export type CursorTodoStatus =
+  | "pending"
+  | "in_progress"
+  | "completed"
+  | "cancelled"
+
+export interface CursorTodo {
+  id: string
+  content: string
+  status: CursorTodoStatus
+}
+
+/** Cursor CLI `cursor/create_plan` awaiting user approval. */
+export interface PendingPlanState {
+  plan_id: string
+  tool_call_id: string
+  name?: string | null
+  overview?: string | null
+  plan: string
+  todos: CursorTodo[]
+  created_at: string
+}
+
+/** Submission to `acp_answer_plan`. */
+export interface PlanAnswer {
+  accepted: boolean
+  reason?: string | null
+  cancelled?: boolean
 }
 
 export interface SessionModeInfo {
@@ -1224,6 +1269,43 @@ export type AcpEvent =
       question_id: string
     }
   /**
+   * Cursor CLI `cursor/create_plan`: blocking plan approval. Carried in the
+   * snapshot as `pending_plan` for mid-turn attach.
+   */
+  | {
+      type: "plan_approval_request"
+      plan_id: string
+      tool_call_id: string
+      name?: string | null
+      overview?: string | null
+      plan: string
+      todos: CursorTodo[]
+    }
+  | {
+      type: "plan_approval_resolved"
+      plan_id: string
+    }
+  /**
+   * Cursor CLI `cursor/task`: ephemeral subagent task notification (UI toast /
+   * chat-channel info push). Not stored in the live snapshot.
+   */
+  | {
+      type: "cursor_task"
+      description: string
+      subagent_type: string
+      duration_ms?: number | null
+      agent_id?: string | null
+    }
+  /**
+   * Cursor CLI `cursor/generate_image`: ephemeral image notification.
+   */
+  | {
+      type: "cursor_generate_image"
+      description: string
+      file_path?: string | null
+      reference_image_paths?: string[]
+    }
+  /**
    * The agent's effective settings (env vars / model provider / native config)
    * changed AFTER this connection spawned, so the running process is still on
    * its launch-time config. The frontend shows a "restart to apply" banner.
@@ -1392,6 +1474,8 @@ export interface LiveSessionSnapshot {
   /** Awaiting-answer `ask_user_question`, recoverable on mid-turn attach.
    *  Absent (omitted) when no question is pending. */
   pending_question?: PendingQuestionState | null
+  /** Cursor CLI `cursor/create_plan` awaiting approval. */
+  pending_plan?: PendingPlanState | null
   /** In-flight user prompt for the current turn — lets a client attaching
    *  mid-turn render the user turn. Absent (omitted) when no turn is in flight. */
   pending_user_message?: {

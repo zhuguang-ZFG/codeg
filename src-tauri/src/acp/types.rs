@@ -292,6 +292,38 @@ pub enum AcpEvent {
     /// (the tool call was aborted / the connection drained). Carries only the
     /// `question_id`; clients clear the matching card. Idempotent on apply.
     QuestionResolved { question_id: String },
+    /// Cursor CLI `cursor/create_plan`: the agent blocks until the user accepts
+    /// or rejects the proposed plan. Carried into `SessionState.pending_plan`
+    /// so reconnecting clients recover the approval card.
+    PlanApprovalRequest {
+        plan_id: String,
+        tool_call_id: String,
+        name: Option<String>,
+        overview: Option<String>,
+        plan: String,
+        todos: Vec<crate::acp::cursor_ext::CursorTodo>,
+    },
+    /// A pending plan approval was resolved (accepted / rejected / canceled).
+    PlanApprovalResolved { plan_id: String },
+    /// Cursor CLI `cursor/task`: ephemeral subagent task notification (toast /
+    /// chat-channel info push). Not captured in the live snapshot.
+    CursorTask {
+        description: String,
+        subagent_type: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        duration_ms: Option<u64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        agent_id: Option<String>,
+    },
+    /// Cursor CLI `cursor/generate_image`: ephemeral image-generation
+    /// notification (toast / chat-channel info push). Not captured in snapshot.
+    CursorGenerateImage {
+        description: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        file_path: Option<String>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        reference_image_paths: Vec<String>,
+    },
     /// The agent's effective settings (env vars / model provider / native config
     /// files) changed AFTER this connection was spawned, so the running process
     /// is still using its launch-time config. Emitted by

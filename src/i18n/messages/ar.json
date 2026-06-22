@@ -2226,6 +2226,25 @@
         "submit": "إرسال",
         "submitError": "تعذّر الإرسال. حاول مرة أخرى."
       },
+      "planApproval": {
+        "titleFallback": "الموافقة على الخطة",
+        "badge": "خطة",
+        "accept": "قبول الخطة",
+        "reject": "رفض",
+        "submitError": "تعذّر الإرسال. يرجى المحاولة مرة أخرى."
+      },
+      "cursorTask": {
+        "fallbackDescription": "تحديث مهمة الوكيل الفرعي",
+        "toastDescription": "الوكيل الفرعي: {subagent}",
+        "toastDescriptionWithDuration": "الوكيل الفرعي: {subagent} · {duration}"
+      },
+      "cursorGenerateImage": {
+        "fallbackDescription": "تم إنشاء الصورة",
+        "toastDescription": "اكتمل إنشاء الصورة",
+        "toastDescriptionWithPath": "حُفظت في {path}",
+        "references": "{count} صورة مرجعية",
+        "openFile": "فتح الملف"
+      },
       "feedbackCheckResult": {
         "count": "{count} ملاحظة",
         "expand": "عرض كل الملاحظات",
@@ -2506,6 +2525,12 @@
       "permissionRequestDesc": "عندما يطلب الوكيل إذنًا لتنفيذ إجراء",
       "questionRequest": "سؤال من الوكيل",
       "questionRequestDesc": "عندما يطرح أحد الوكلاء سؤالاً عليك",
+      "planApprovalRequest": "الموافقة على الخطة",
+      "planApprovalRequestDesc": "عندما يرسل Cursor خطة للموافقة",
+      "cursorTask": "مهمة الوكيل الفرعي",
+      "cursorTaskDesc": "عندما يبلّغ Cursor عن مهمة وكيل فرعي",
+      "cursorGenerateImage": "إنشاء صورة",
+      "cursorGenerateImageDesc": "عندما يبلّغ Cursor عن صورة مُنشأة",
       "userPromptSent": "رسالة المستخدم",
       "userPromptSentDesc": "عند إرسالك رسالة — يُضمَّن نص الرسالة في الإشعار",
       "saved": "تم تحديث فلتر الأحداث.",

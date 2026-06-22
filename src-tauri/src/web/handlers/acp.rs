@@ -432,6 +432,26 @@ pub async fn acp_answer_question(
     Ok(Json(()))
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AcpAnswerPlanParams {
+    pub connection_id: String,
+    pub plan_id: String,
+    pub answer: crate::acp::cursor_ext::PlanAnswer,
+}
+
+pub async fn acp_answer_plan(
+    Extension(state): Extension<Arc<AppState>>,
+    Json(params): Json<AcpAnswerPlanParams>,
+) -> Result<Json<()>, AppCommandError> {
+    state
+        .connection_manager
+        .answer_plan(&params.connection_id, &params.plan_id, params.answer)
+        .await
+        .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
+    Ok(Json(()))
+}
+
 pub async fn acp_list_connections(
     Extension(state): Extension<Arc<AppState>>,
 ) -> Result<Json<Vec<ConnectionInfo>>, AppCommandError> {

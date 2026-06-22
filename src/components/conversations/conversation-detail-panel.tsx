@@ -1200,6 +1200,12 @@ const ConversationTabView = memo(function ConversationTabView({
     [acpActions, tabId]
   )
 
+  const handleAnswerPlan = useCallback(
+    (planId: string, answer: import("@/lib/types").PlanAnswer) =>
+      acpActions.answerPlan(tabId, planId, answer),
+    [acpActions, tabId]
+  )
+
   // Queue edit flow: derive editing draft text from queue state
   const editingQueueDraftText = useMemo(() => {
     if (!mqEditingItemId) return null
@@ -1323,12 +1329,14 @@ const ConversationTabView = memo(function ConversationTabView({
       pendingPermission={conn.pendingPermission}
       pendingQuestion={conn.pendingQuestion}
       pendingAskQuestion={conn.pendingAskQuestion}
+      pendingPlan={conn.pendingPlan}
       onFocus={handleFocus}
       onSend={handleSend}
       onCancel={handleCancel}
       onRespondPermission={handleRespondPermission}
       onAnswerQuestion={handleAnswerQuestion}
       onAnswerAskQuestion={handleAnswerAskQuestion}
+      onAnswerPlan={handleAnswerPlan}
       modes={connectionModes}
       configOptions={connectionConfigOptions}
       modeLoading={modeLoading}

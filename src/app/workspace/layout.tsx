@@ -13,6 +13,7 @@ import { FolderTitleBar } from "@/components/layout/folder-title-bar"
 import { useIsActiveChatMode } from "@/hooks/use-is-active-chat-mode"
 import { Sidebar } from "@/components/layout/sidebar"
 import { StatusBar } from "@/components/layout/status-bar"
+import { CursorNotificationToastBridge } from "@/components/chat/cursor-task-toast-bridge"
 import {
   AppWorkspaceProvider,
   ConversationStatusEventBridge,
@@ -874,6 +875,7 @@ function WorkspaceLayoutInner({ children }: { children: React.ReactNode }) {
               <AcpConnectionsProvider>
                 <DelegationProvider>
                   <ConversationStatusEventBridge />
+                  <CursorNotificationToastBridge />
                   <ConversationRuntimeProvider>
                     <WorkspaceProvider>
                       <TabProvider>

@@ -57,6 +57,21 @@ const ALL_EVENT_TYPES = [
     labelKey: "questionRequest",
     descKey: "questionRequestDesc",
   },
+  {
+    id: "plan_approval_request",
+    labelKey: "planApprovalRequest",
+    descKey: "planApprovalRequestDesc",
+  },
+  {
+    id: "cursor_task",
+    labelKey: "cursorTask",
+    descKey: "cursorTaskDesc",
+  },
+  {
+    id: "cursor_generate_image",
+    labelKey: "cursorGenerateImage",
+    descKey: "cursorGenerateImageDesc",
+  },
 ] as const
 
 const ALL_IDS = ALL_EVENT_TYPES.map((e) => e.id)
@@ -134,6 +149,42 @@ const PAYLOAD_EXAMPLES: Record<(typeof ALL_EVENT_TYPES)[number]["id"], string> =
   "title": "Agent Question",
   "body": "An agent is asking a question. Answer it in Codeg.",
   "fields": [{ "label": "Approach", "value": "Which approach should we take?\\n• MVP first\\n• Risk first" }],
+  "connection_id": "conn-abc",
+  "source": "codeg"
+}`,
+    plan_approval_request: `{
+  "event": "plan_approval_request",
+  "level": "warning",
+  "title": "Plan Approval",
+  "body": "A Cursor agent submitted a plan. Review it in Codeg.",
+  "fields": [
+    { "label": "Name", "value": "Refactor tabs layout" },
+    { "label": "Plan", "value": "1. Inspect sizing\\n2. Update layout" }
+  ],
+  "connection_id": "conn-abc",
+  "source": "codeg"
+}`,
+    cursor_task: `{
+  "event": "cursor_task",
+  "level": "info",
+  "title": "Subagent Task",
+  "body": "Explore codebase",
+  "fields": [
+    { "label": "Type", "value": "explore" },
+    { "label": "Duration", "value": "1.2s" }
+  ],
+  "connection_id": "conn-abc",
+  "source": "codeg"
+}`,
+    cursor_generate_image: `{
+  "event": "cursor_generate_image",
+  "level": "info",
+  "title": "Image Generated",
+  "body": "Minimal flat app icon for a note-taking app",
+  "fields": [
+    { "label": "Path", "value": "/tmp/icon.png" },
+    { "label": "References", "value": "/tmp/reference.png" }
+  ],
   "connection_id": "conn-abc",
   "source": "codeg"
 }`,

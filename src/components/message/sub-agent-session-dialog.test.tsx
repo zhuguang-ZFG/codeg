@@ -18,6 +18,7 @@ const mockGetSession = vi.fn()
 const mockGetTimelineTurns = vi.fn(() => [])
 const mockRespondPermission = vi.fn()
 const mockAnswerQuestion = vi.fn()
+const mockAnswerPlan = vi.fn()
 // syncTurnMetadata returns a cancel function; hand back a spy so tests can
 // assert both that the backfill is kicked off and that it's cancelled on close.
 const mockSyncCancel = vi.fn()
@@ -79,6 +80,7 @@ vi.mock("@/contexts/acp-connections-context", async () => {
     useAcpActions: () => ({
       respondPermission: mockRespondPermission,
       answerQuestion: mockAnswerQuestion,
+      answerPlan: mockAnswerPlan,
     }),
   }
 })
@@ -124,6 +126,25 @@ vi.mock("@/components/chat/ask-question-card", () => ({
       }
     >
       ask question {question.question_id}
+    </button>
+  ),
+}))
+
+vi.mock("@/components/chat/plan-approval-card", () => ({
+  PlanApprovalCard: ({
+    plan,
+    onAnswer,
+  }: {
+    plan: { plan_id: string }
+    onAnswer: (planId: string, answer: unknown) => void | Promise<void>
+  }) => (
+    <button
+      data-testid="plan-approval-card"
+      onClick={() =>
+        onAnswer(plan.plan_id, { accepted: true, cancelled: false })
+      }
+    >
+      plan approval {plan.plan_id}
     </button>
   ),
 }))
@@ -195,6 +216,7 @@ function makeConnState(overrides: Partial<ConnectionState>): ConnectionState {
     pendingPermission: null,
     pendingQuestion: null,
     pendingAskQuestion: null,
+    pendingPlan: null,
     claudeApiRetry: null,
     error: null,
     loadError: null,
@@ -223,6 +245,7 @@ describe("SubAgentSessionDialog", () => {
     mockGetTimelineTurns.mockClear()
     mockRespondPermission.mockReset()
     mockAnswerQuestion.mockReset()
+    mockAnswerPlan.mockReset()
     mockSyncCancel.mockReset()
     mockSyncTurnMetadata.mockClear()
     mockSyncTurnMetadata.mockReturnValue(mockSyncCancel)
@@ -330,6 +353,75 @@ describe("SubAgentSessionDialog", () => {
       />
     )
     expect(screen.queryByTestId("ask-question-card")).not.toBeInTheDocument()
+  })
+
+  it("surfaces the child's pending plan approval and routes the answer through the child connection id", () => {
+    mockChildConnection = makeConnState({
+      pendingPlan: {
+        plan_id: "plan-1",
+        tool_call_id: "tc-1",
+        name: "Refactor auth",
+        overview: "Split modules",
+        plan: "Step 1\nStep 2",
+        todos: [],
+        created_at: "2024-01-01T00:00:00.000Z",
+      } as unknown as ConnectionState["pendingPlan"],
+    })
+    renderWithIntl(
+      <SubAgentSessionDialog
+        open
+        onOpenChange={() => {}}
+        childConversationId={99}
+        childConnectionId="c1"
+        agentType="codex"
+      />
+    )
+    const card = screen.getByTestId("plan-approval-card")
+    expect(card).toHaveTextContent("plan approval plan-1")
+    fireEvent.click(card)
+    expect(mockAnswerPlan).toHaveBeenCalledWith(
+      "c1",
+      "plan-1",
+      expect.objectContaining({ accepted: true, cancelled: false })
+    )
+  })
+
+  it("renders no plan-approval card when the child has no pending plan", () => {
+    mockChildConnection = makeConnState({ pendingPlan: null })
+    renderWithIntl(
+      <SubAgentSessionDialog
+        open
+        onOpenChange={() => {}}
+        childConversationId={99}
+        childConnectionId="c1"
+        agentType="codex"
+      />
+    )
+    expect(screen.queryByTestId("plan-approval-card")).not.toBeInTheDocument()
+  })
+
+  it("renders no plan-approval card without a child connection id", () => {
+    mockChildConnection = makeConnState({
+      pendingPlan: {
+        plan_id: "plan-1",
+        tool_call_id: "tc-1",
+        name: null,
+        overview: null,
+        plan: "Do things",
+        todos: [],
+        created_at: "2024-01-01T00:00:00.000Z",
+      } as unknown as ConnectionState["pendingPlan"],
+    })
+    renderWithIntl(
+      <SubAgentSessionDialog
+        open
+        onOpenChange={() => {}}
+        childConversationId={99}
+        childConnectionId={null}
+        agentType="codex"
+      />
+    )
+    expect(screen.queryByTestId("plan-approval-card")).not.toBeInTheDocument()
   })
 
   it("renders no ask-question card for an empty question set", () => {

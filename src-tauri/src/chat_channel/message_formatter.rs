@@ -110,6 +110,90 @@ pub fn format_question_request(questions: &[QuestionSpec], lang: Lang) -> RichMe
     }
 }
 
+/// Build the global-event-push notification for Cursor CLI `cursor/create_plan`.
+/// Like a question request it is a blocking interactive gate — the agent waits
+/// until the user accepts or rejects the plan.
+pub fn format_plan_approval_request(
+    name: Option<&str>,
+    overview: Option<&str>,
+    plan: &str,
+    lang: Lang,
+) -> RichMessage {
+    let mut fields = Vec::new();
+    if let Some(title) = name.filter(|s| !s.trim().is_empty()) {
+        fields.push((i18n::plan_name_label(lang).to_string(), title.to_string()));
+    }
+    if let Some(summary) = overview.filter(|s| !s.trim().is_empty()) {
+        fields.push((
+            i18n::plan_overview_label(lang).to_string(),
+            summary.to_string(),
+        ));
+    }
+    fields.push((i18n::plan_body_label(lang).to_string(), plan.to_string()));
+
+    RichMessage {
+        title: Some(i18n::plan_approval_request_title(lang).to_string()),
+        body: i18n::plan_approval_request_body(lang).to_string(),
+        fields,
+        level: MessageLevel::Warning,
+    }
+}
+
+/// Build the info-level notification for Cursor CLI `cursor/task` subagent updates.
+pub fn format_cursor_task(
+    description: &str,
+    subagent_type: &str,
+    duration_ms: Option<u64>,
+    lang: Lang,
+) -> RichMessage {
+    let mut fields = vec![(
+        i18n::cursor_task_subagent_label(lang).to_string(),
+        subagent_type.to_string(),
+    )];
+    if let Some(ms) = duration_ms {
+        fields.push((
+            i18n::cursor_task_duration_label(lang).to_string(),
+            i18n::cursor_task_duration_value(lang, ms),
+        ));
+    }
+
+    RichMessage {
+        title: Some(i18n::cursor_task_title(lang).to_string()),
+        body: description.to_string(),
+        fields,
+        level: MessageLevel::Info,
+    }
+}
+
+/// Build the info-level notification for Cursor CLI `cursor/generate_image`.
+pub fn format_cursor_generate_image(
+    description: &str,
+    file_path: Option<&str>,
+    reference_image_paths: &[String],
+    lang: Lang,
+) -> RichMessage {
+    let mut fields = Vec::new();
+    if let Some(path) = file_path.filter(|p| !p.trim().is_empty()) {
+        fields.push((
+            i18n::cursor_generate_image_path_label(lang).to_string(),
+            path.to_string(),
+        ));
+    }
+    if !reference_image_paths.is_empty() {
+        fields.push((
+            i18n::cursor_generate_image_references_label(lang).to_string(),
+            reference_image_paths.join("\n"),
+        ));
+    }
+
+    RichMessage {
+        title: Some(i18n::cursor_generate_image_title(lang).to_string()),
+        body: description.to_string(),
+        fields,
+        level: MessageLevel::Info,
+    }
+}
+
 pub struct DailyReportData {
     pub date: String,
     pub conversations_by_agent: Vec<(String, u32)>,
@@ -266,5 +350,50 @@ mod question_request_tests {
     fn localizes_title_per_language() {
         let msg = format_question_request(&[spec("方式", "选哪个？", &[])], Lang::ZhCn);
         assert_eq!(msg.title.as_deref(), Some("智能体提问"));
+    }
+}
+
+#[cfg(test)]
+mod plan_and_cursor_task_tests {
+    use super::*;
+
+    #[test]
+    fn plan_approval_includes_name_overview_and_body() {
+        let msg = format_plan_approval_request(
+            Some("Auth refactor"),
+            Some("Split modules"),
+            "Step 1\nStep 2",
+            Lang::En,
+        );
+        assert_eq!(msg.level, MessageLevel::Warning);
+        assert_eq!(msg.title.as_deref(), Some("Plan Approval"));
+        let text = msg.to_plain_text();
+        assert!(text.contains("Auth refactor"), "got {text}");
+        assert!(text.contains("Split modules"), "got {text}");
+        assert!(text.contains("Step 1"), "got {text}");
+    }
+
+    #[test]
+    fn cursor_task_includes_subagent_and_duration() {
+        let msg = format_cursor_task("Explore codebase", "explore", Some(1500), Lang::En);
+        assert_eq!(msg.level, MessageLevel::Info);
+        assert_eq!(msg.body, "Explore codebase");
+        let text = msg.to_plain_text();
+        assert!(text.contains("explore"), "got {text}");
+        assert!(text.contains("1.5s"), "got {text}");
+    }
+
+    #[test]
+    fn cursor_generate_image_includes_path_and_references() {
+        let msg = format_cursor_generate_image(
+            "App icon mockup",
+            Some("/tmp/icon.png"),
+            &["/tmp/ref.png".into()],
+            Lang::En,
+        );
+        assert_eq!(msg.body, "App icon mockup");
+        let text = msg.to_plain_text();
+        assert!(text.contains("/tmp/icon.png"), "got {text}");
+        assert!(text.contains("/tmp/ref.png"), "got {text}");
     }
 }

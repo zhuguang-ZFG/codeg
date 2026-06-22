@@ -333,9 +333,14 @@ async fn process_envelope(
     //   - question_request: like permission_request, a blocking interactive
     //     gate (the agent is parked on ask_user_question); a second gate within
     //     the 5s window would be dropped with no later event to re-trigger it.
+    //   - plan_approval_request: same blocking pattern as question_request
+    //     (Cursor `cursor/create_plan`).
     let debounced = !matches!(
         event_type.as_str(),
-        "permission_request" | "user_prompt_sent" | "question_request"
+        "permission_request"
+            | "user_prompt_sent"
+            | "question_request"
+            | "plan_approval_request"
     );
 
     for ch in &config.enabled_channels {
@@ -426,6 +431,42 @@ fn parse_acp_event(payload: &AcpEvent, lang: Lang) -> Option<(String, RichMessag
         AcpEvent::QuestionRequest { questions, .. } => Some((
             "question_request".to_string(),
             message_formatter::format_question_request(questions, lang),
+        )),
+        AcpEvent::PlanApprovalRequest {
+            name,
+            overview,
+            plan,
+            ..
+        } => Some((
+            "plan_approval_request".to_string(),
+            message_formatter::format_plan_approval_request(
+                name.as_deref(),
+                overview.as_deref(),
+                plan,
+                lang,
+            ),
+        )),
+        AcpEvent::CursorTask {
+            description,
+            subagent_type,
+            duration_ms,
+            ..
+        } => Some((
+            "cursor_task".to_string(),
+            message_formatter::format_cursor_task(description, subagent_type, *duration_ms, lang),
+        )),
+        AcpEvent::CursorGenerateImage {
+            description,
+            file_path,
+            reference_image_paths,
+        } => Some((
+            "cursor_generate_image".to_string(),
+            message_formatter::format_cursor_generate_image(
+                description,
+                file_path.as_deref(),
+                reference_image_paths,
+                lang,
+            ),
         )),
         _ => None,
     }
@@ -623,6 +664,46 @@ mod permission_push_tests {
                         },
                     ],
                 }],
+            },
+        }
+    }
+
+    fn plan_approval_request_envelope(connection_id: &str) -> EventEnvelope {
+        EventEnvelope {
+            seq: 1,
+            connection_id: connection_id.into(),
+            payload: AcpEvent::PlanApprovalRequest {
+                plan_id: "plan-1".into(),
+                tool_call_id: "tc-1".into(),
+                name: Some("Auth refactor".into()),
+                overview: Some("Split modules".into()),
+                plan: "Step 1\nStep 2".into(),
+                todos: vec![],
+            },
+        }
+    }
+
+    fn cursor_task_envelope(connection_id: &str) -> EventEnvelope {
+        EventEnvelope {
+            seq: 1,
+            connection_id: connection_id.into(),
+            payload: AcpEvent::CursorTask {
+                description: "Explore codebase".into(),
+                subagent_type: "explore".into(),
+                duration_ms: Some(1200),
+                agent_id: None,
+            },
+        }
+    }
+
+    fn cursor_generate_image_envelope(connection_id: &str) -> EventEnvelope {
+        EventEnvelope {
+            seq: 1,
+            connection_id: connection_id.into(),
+            payload: AcpEvent::CursorGenerateImage {
+                description: "App icon mockup".into(),
+                file_path: Some("/tmp/icon.png".into()),
+                reference_image_paths: vec!["/tmp/ref.png".into()],
             },
         }
     }
@@ -1718,5 +1799,77 @@ mod permission_push_tests {
             request.contains("\"event\":\"question_request\""),
             "got: {request}"
         );
+    }
+
+    #[tokio::test]
+    async fn plan_approval_request_pushed_by_default() {
+        let db = test_helpers::fresh_in_memory_db().await;
+        let (chat, rec) = manager_with_recorder(7).await;
+        let bridge = Arc::new(Mutex::new(SessionBridge::new()));
+        let config = config_all_on(7);
+        let mut last_push = HashMap::new();
+
+        process_envelope(
+            &plan_approval_request_envelope("desktop-conn"),
+            &bridge,
+            &chat,
+            &db.conn,
+            &config,
+            &mut last_push,
+            &test_client(),
+        )
+        .await;
+
+        let msgs = sent(&rec).await;
+        assert_eq!(msgs.len(), 1);
+        assert!(msgs[0].contains("Plan Approval"), "got {}", msgs[0]);
+    }
+
+    #[tokio::test]
+    async fn cursor_task_pushed_by_default() {
+        let db = test_helpers::fresh_in_memory_db().await;
+        let (chat, rec) = manager_with_recorder(7).await;
+        let bridge = Arc::new(Mutex::new(SessionBridge::new()));
+        let config = config_all_on(7);
+        let mut last_push = HashMap::new();
+
+        process_envelope(
+            &cursor_task_envelope("desktop-conn"),
+            &bridge,
+            &chat,
+            &db.conn,
+            &config,
+            &mut last_push,
+            &test_client(),
+        )
+        .await;
+
+        let msgs = sent(&rec).await;
+        assert_eq!(msgs.len(), 1);
+        assert!(msgs[0].contains("Explore codebase"), "got {}", msgs[0]);
+    }
+
+    #[tokio::test]
+    async fn cursor_generate_image_pushed_by_default() {
+        let db = test_helpers::fresh_in_memory_db().await;
+        let (chat, rec) = manager_with_recorder(7).await;
+        let bridge = Arc::new(Mutex::new(SessionBridge::new()));
+        let config = config_all_on(7);
+        let mut last_push = HashMap::new();
+
+        process_envelope(
+            &cursor_generate_image_envelope("desktop-conn"),
+            &bridge,
+            &chat,
+            &db.conn,
+            &config,
+            &mut last_push,
+            &test_client(),
+        )
+        .await;
+
+        let msgs = sent(&rec).await;
+        assert_eq!(msgs.len(), 1);
+        assert!(msgs[0].contains("App icon mockup"), "got {}", msgs[0]);
     }
 }

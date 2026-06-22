@@ -230,6 +230,10 @@ pub struct SessionState {
     /// the backend's `pending_questions` registry keys the answer one-shot.
     pub pending_question: Option<PendingQuestionState>,
 
+    /// Cursor CLI `cursor/create_plan` awaiting user approval. Set by
+    /// `PlanApprovalRequest`, cleared by a matching `PlanApprovalResolved`.
+    pub pending_plan: Option<crate::acp::cursor_ext::PendingPlanState>,
+
     /// In-flight (running) sub-agent delegations keyed by `parent_tool_use_id`.
     /// `DelegationStarted` inserts; `DelegationCompleted` removes. UNLIKE
     /// `active_tool_calls`, NOT cleared on `TurnComplete` (an async delegation
@@ -391,6 +395,7 @@ impl SessionState {
             active_tool_calls: BTreeMap::new(),
             pending_permission: None,
             pending_question: None,
+            pending_plan: None,
             active_delegations: BTreeMap::new(),
             feedback: Vec::new(),
             modes: None,
@@ -633,6 +638,35 @@ impl SessionState {
                     self.pending_question = None;
                 }
             }
+            AcpEvent::PlanApprovalRequest {
+                plan_id,
+                tool_call_id,
+                name,
+                overview,
+                plan,
+                todos,
+            } => {
+                self.pending_plan = Some(crate::acp::cursor_ext::PendingPlanState {
+                    plan_id: plan_id.clone(),
+                    tool_call_id: tool_call_id.clone(),
+                    name: name.clone(),
+                    overview: overview.clone(),
+                    plan: plan.clone(),
+                    todos: todos.clone(),
+                    created_at: Utc::now(),
+                });
+            }
+            AcpEvent::PlanApprovalResolved { plan_id } => {
+                if matches!(&self.pending_plan, Some(p) if p.plan_id == *plan_id) {
+                    self.pending_plan = None;
+                }
+            }
+            AcpEvent::CursorTask { .. } => {
+                // Ephemeral notification — UI toast / chat-channel push only.
+            }
+            AcpEvent::CursorGenerateImage { .. } => {
+                // Ephemeral notification — UI toast / chat-channel push only.
+            }
             AcpEvent::TurnComplete { .. } => {
                 // Snapshot the just-finished turn's FINAL assistant text — what
                 // `get_delegation_status` returns as the child result. We take
@@ -690,6 +724,7 @@ impl SessionState {
                 // answer one-shot is cleaned via the listener's peer-close race;
                 // this just keeps the snapshot honest.
                 self.pending_question = None;
+                self.pending_plan = None;
                 self.status = ConnectionStatus::Connected;
             }
             AcpEvent::UserMessage { message_id, blocks } => {
@@ -1072,6 +1107,7 @@ impl SessionState {
             active_tool_calls: self.active_tool_calls.values().cloned().collect(),
             pending_permission: self.pending_permission.clone(),
             pending_question: self.pending_question.clone(),
+            pending_plan: self.pending_plan.clone(),
             pending_user_message: self.pending_user_message.clone(),
             active_delegations: self.active_delegations.values().cloned().collect(),
             feedback: self.feedback.clone(),
@@ -1108,6 +1144,10 @@ pub struct LiveSessionSnapshot {
     /// the wire so every snapshot stays byte-identical with the pre-feature shape.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pending_question: Option<PendingQuestionState>,
+    /// Cursor CLI `cursor/create_plan` awaiting approval (see
+    /// `SessionState.pending_plan`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pending_plan: Option<crate::acp::cursor_ext::PendingPlanState>,
     /// The in-flight user prompt for the current turn (see
     /// `SessionState.pending_user_message`). `#[serde(default)]` so older
     /// payloads still deserialize; `skip_serializing_if` so the no-pending case
@@ -2927,6 +2967,34 @@ mod tests {
         assert!(
             !empty.contains("\"feedback\":"),
             "no-feedback snapshot must omit the notes array"
+        );
+    }
+
+    #[test]
+    fn cursor_task_is_ephemeral_and_does_not_clear_pending_plan() {
+        let mut s = fresh_state();
+        s.apply_event(&AcpEvent::PlanApprovalRequest {
+            plan_id: "plan-1".into(),
+            tool_call_id: "tc-1".into(),
+            name: Some("Refactor".into()),
+            overview: None,
+            plan: "Step 1".into(),
+            todos: vec![],
+        });
+        s.apply_event(&AcpEvent::CursorTask {
+            description: "Explore codebase".into(),
+            subagent_type: "explore".into(),
+            duration_ms: Some(900),
+            agent_id: None,
+        });
+        assert!(
+            s.pending_plan.is_some(),
+            "cursor/task must not clear a live plan approval card"
+        );
+        let snap = s.to_snapshot();
+        assert!(
+            snap.pending_plan.is_some(),
+            "cursor/task must not appear in snapshot state"
         );
     }
 }

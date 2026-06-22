@@ -26,6 +26,7 @@ import {
   acpCancel,
   acpRespondPermission,
   acpAnswerQuestion,
+  acpAnswerPlan,
   acpDisconnect,
   acpTouchConnection,
   acpGetSessionSnapshot,
@@ -46,6 +47,8 @@ import type {
   PlanEntryInfo,
   PermissionOptionInfo,
   PendingQuestionState,
+  PendingPlanState,
+  PlanAnswer,
   QuestionAnswer,
   SessionConfigOptionInfo,
   SessionModeStateInfo,
@@ -175,6 +178,8 @@ export interface ConnectionState {
    *  `pending_question`; cleared on `question_resolved` or turn end. Distinct
    *  from the free-text `pendingQuestion` above. */
   pendingAskQuestion: PendingQuestionState | null
+  /** Cursor CLI `cursor/create_plan` awaiting user approval. */
+  pendingPlan: PendingPlanState | null
   claudeApiRetry: ClaudeApiRetryState | null
   error: string | null
   /**
@@ -395,6 +400,16 @@ type Action =
       /** When present, only clear if the current question_id matches (guards a
        *  late `question_resolved` from wiping a freshly-raised question). */
       questionId?: string
+    }
+  | {
+      type: "SET_PLAN_APPROVAL"
+      contextKey: string
+      pendingPlan: PendingPlanState
+    }
+  | {
+      type: "CLEAR_PLAN_APPROVAL"
+      contextKey: string
+      planId?: string
     }
   | { type: "SESSION_STARTED"; contextKey: string; sessionId: string }
   | {
@@ -906,6 +921,7 @@ function connectionsReducer(
         pendingUserMessage: null,
         pendingQuestion: null,
         pendingAskQuestion: null,
+        pendingPlan: null,
         claudeApiRetry: null,
         error: null,
         loadError: null,
@@ -959,6 +975,7 @@ function connectionsReducer(
         pendingUserMessage: null,
         pendingQuestion: null,
         pendingAskQuestion: null,
+        pendingPlan: null,
         claudeApiRetry: null,
         error: null,
         loadError: null,
@@ -1057,6 +1074,7 @@ function connectionsReducer(
         liveMessage: action.patch.liveMessage,
         pendingPermission: action.patch.pendingPermission,
         pendingAskQuestion: action.patch.pendingAskQuestion,
+        pendingPlan: action.patch.pendingPlan,
         pendingUserMessage: action.patch.pendingUserMessage,
         promptCapabilities: mergedPromptCapabilities,
         selectorsReady: mergedSelectorsReady,
@@ -1126,6 +1144,7 @@ function connectionsReducer(
         // clears it via `question_resolved`; this is the safety net for a turn
         // that ended without one (agent error / abandoned block).
         updated.pendingAskQuestion = null
+        updated.pendingPlan = null
       }
       next.set(action.contextKey, updated)
       return next
@@ -1515,6 +1534,34 @@ function connectionsReducer(
       return next
     }
 
+    case "SET_PLAN_APPROVAL": {
+      const conn = state.get(action.contextKey)
+      if (!conn) return state
+      const next = new Map(state)
+      next.set(action.contextKey, {
+        ...conn,
+        pendingPlan: action.pendingPlan,
+      })
+      return next
+    }
+
+    case "CLEAR_PLAN_APPROVAL": {
+      const conn = state.get(action.contextKey)
+      if (!conn) return state
+      if (
+        action.planId !== undefined &&
+        conn.pendingPlan?.plan_id !== action.planId
+      ) {
+        return state
+      }
+      const next = new Map(state)
+      next.set(action.contextKey, {
+        ...conn,
+        pendingPlan: null,
+      })
+      return next
+    }
+
     case "SESSION_STARTED": {
       const conn = state.get(action.contextKey)
       if (!conn) return state
@@ -1870,6 +1917,11 @@ export interface AcpActionsValue {
     contextKey: string,
     questionId: string,
     answer: QuestionAnswer
+  ): Promise<void>
+  answerPlan(
+    contextKey: string,
+    planId: string,
+    answer: PlanAnswer
   ): Promise<void>
   setActiveKey(key: string | null): void
   touchActivity(contextKey: string): void
@@ -2478,6 +2530,29 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
             type: "CLEAR_ASK_QUESTION",
             contextKey,
             questionId: e.question_id,
+          })
+          break
+        case "plan_approval_request":
+          flushStreamingQueue()
+          dispatch({
+            type: "SET_PLAN_APPROVAL",
+            contextKey,
+            pendingPlan: {
+              plan_id: e.plan_id,
+              tool_call_id: e.tool_call_id,
+              name: e.name ?? null,
+              overview: e.overview ?? null,
+              plan: e.plan,
+              todos: e.todos,
+              created_at: new Date().toISOString(),
+            },
+          })
+          break
+        case "plan_approval_resolved":
+          dispatch({
+            type: "CLEAR_PLAN_APPROVAL",
+            contextKey,
+            planId: e.plan_id,
           })
           break
         case "permission_request":
@@ -3883,6 +3958,26 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
     [dispatch]
   )
 
+  const answerPlan = useCallback(
+    async (contextKey: string, planId: string, answer: PlanAnswer) => {
+      const conn = storeRef.current.connections.get(contextKey)
+      if (!conn) {
+        throw new Error(
+          `[AcpConnections] answerPlan: no connection for ${contextKey}`
+        )
+      }
+      try {
+        lastActivityRef.current.set(contextKey, Date.now())
+        await acpAnswerPlan(conn.connectionId, planId, answer)
+        dispatch({ type: "CLEAR_PLAN_APPROVAL", contextKey, planId })
+      } catch (e) {
+        console.error("[AcpConnections] answerPlan failed:", e)
+        throw e
+      }
+    },
+    [dispatch]
+  )
+
   const attachDelegationChild = useCallback(
     (args: {
       connectionId: string
@@ -3964,6 +4059,7 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
       cancel,
       respondPermission,
       answerQuestion,
+      answerPlan,
       setActiveKey,
       touchActivity,
       registerOpenTabKeys,
@@ -3983,6 +4079,7 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
       cancel,
       respondPermission,
       answerQuestion,
+      answerPlan,
       setActiveKey,
       touchActivity,
       registerOpenTabKeys,

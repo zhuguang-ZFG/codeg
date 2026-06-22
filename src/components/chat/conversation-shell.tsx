@@ -4,6 +4,8 @@ import type {
   AgentType,
   ConnectionStatus,
   PendingQuestionState,
+  PendingPlanState,
+  PlanAnswer,
   PromptCapabilitiesInfo,
   PromptDraft,
   PromptInputBlock,
@@ -23,6 +25,7 @@ import { ChatInput } from "@/components/chat/chat-input"
 import { PermissionDialog } from "@/components/chat/permission-dialog"
 import { QuestionDialog } from "@/components/chat/question-dialog"
 import { AskQuestionCard } from "@/components/chat/ask-question-card"
+import { PlanApprovalCard } from "@/components/chat/plan-approval-card"
 
 interface ConversationShellProps {
   status: ConnectionStatus | null
@@ -35,6 +38,8 @@ interface ConversationShellProps {
   pendingQuestion: PendingQuestion | null
   /** Awaiting-answer multiple-choice `ask_user_question`. */
   pendingAskQuestion: PendingQuestionState | null
+  /** Cursor CLI `cursor/create_plan` awaiting approval. */
+  pendingPlan: PendingPlanState | null
   onFocus: () => void
   onSend: (draft: PromptDraft, modeId?: string | null) => void
   onCancel: () => void
@@ -43,6 +48,10 @@ interface ConversationShellProps {
   onAnswerAskQuestion: (
     questionId: string,
     answer: QuestionAnswer
+  ) => void | Promise<void>
+  onAnswerPlan: (
+    planId: string,
+    answer: PlanAnswer
   ) => void | Promise<void>
   children: ReactNode
   modes?: SessionModeInfo[]
@@ -96,12 +105,14 @@ export function ConversationShell({
   pendingPermission,
   pendingQuestion,
   pendingAskQuestion,
+  pendingPlan,
   onFocus,
   onSend,
   onCancel,
   onRespondPermission,
   onAnswerQuestion,
   onAnswerAskQuestion,
+  onAnswerPlan,
   children,
   modes,
   configOptions,
@@ -213,6 +224,12 @@ export function ConversationShell({
               question={pendingAskQuestion}
               onAnswer={onAnswerAskQuestion}
             />
+          </div>
+        )}
+
+        {pendingPlan && (
+          <div className="mx-auto w-full max-w-3xl px-4">
+            <PlanApprovalCard plan={pendingPlan} onAnswer={onAnswerPlan} />
           </div>
         )}
 

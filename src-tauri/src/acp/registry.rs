@@ -22,6 +22,15 @@ pub enum AgentDistribution {
     /// Python agents launched through `uvx` (the `uv` tool runner), which
     /// fetches + caches the pinned package on first use — analogous to npx.
     /// Used for ACP agents distributed as Python packages (e.g. Hermes).
+    /// Agents installed via their official installer onto PATH (e.g. Cursor CLI's
+    /// `agent` binary). Codeg does not cache a copy — it resolves the command
+    /// from PATH and common install locations (`~/.local/bin`).
+    Path {
+        version: &'static str,
+        cmd: &'static str,
+        args: &'static [&'static str],
+        env: &'static [(&'static str, &'static str)],
+    },
     Uvx {
         version: &'static str,
         /// The `uvx --from` package spec, e.g. "hermes-agent[acp,mcp]==0.16.0".
@@ -63,6 +72,7 @@ impl AcpAgentMeta {
         match &self.distribution {
             AgentDistribution::Npx { version, .. }
             | AgentDistribution::Binary { version, .. }
+            | AgentDistribution::Path { version, .. }
             | AgentDistribution::Uvx { version, .. } => Some(*version),
         }
     }
@@ -104,6 +114,9 @@ pub fn all_acp_agents() -> Vec<AgentType> {
         AgentType::OpenCode,
         AgentType::Cline,
         AgentType::Hermes,
+        AgentType::KimiCode,
+        AgentType::MimoCode,
+        AgentType::Cursor,
     ]
 }
 
@@ -116,6 +129,9 @@ pub fn registry_id_for(agent_type: AgentType) -> &'static str {
         AgentType::OpenCode => "opencode",
         AgentType::Cline => "cline",
         AgentType::Hermes => "hermes",
+        AgentType::KimiCode => "kimi-code",
+        AgentType::MimoCode => "mimo-code",
+        AgentType::Cursor => "cursor",
     }
 }
 
@@ -128,6 +144,9 @@ pub fn from_registry_id(id: &str) -> Option<AgentType> {
         "opencode" => Some(AgentType::OpenCode),
         "cline" => Some(AgentType::Cline),
         "hermes" => Some(AgentType::Hermes),
+        "kimi-code" => Some(AgentType::KimiCode),
+        "mimo-code" => Some(AgentType::MimoCode),
+        "cursor" => Some(AgentType::Cursor),
         _ => None,
     }
 }
@@ -264,6 +283,43 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
                 ],
             },
         },
+        AgentType::KimiCode => AcpAgentMeta {
+            agent_type,
+            name: "Kimi Code",
+            description: "Moonshot AI terminal coding agent (ACP via kimi acp)",
+            distribution: AgentDistribution::Npx {
+                version: "0.8.0",
+                package: "@moonshot-ai/kimi-code@0.8.0",
+                cmd: "kimi",
+                args: &["acp"],
+                env: &[],
+                node_required: Some("24.15.0"),
+            },
+        },
+        AgentType::MimoCode => AcpAgentMeta {
+            agent_type,
+            name: "MiMo Code",
+            description: "Xiaomi MiMo terminal coding agent (ACP via mimo acp)",
+            distribution: AgentDistribution::Npx {
+                version: "0.1.0",
+                package: "@mimo-ai/cli@0.1.0",
+                cmd: "mimo",
+                args: &["acp"],
+                env: &[],
+                node_required: Some("20.0.0"),
+            },
+        },
+        AgentType::Cursor => AcpAgentMeta {
+            agent_type,
+            name: "Cursor CLI",
+            description: "Cursor terminal agent (ACP via agent acp)",
+            distribution: AgentDistribution::Path {
+                version: "2026.6.0",
+                cmd: "agent",
+                args: &["acp"],
+                env: &[],
+            },
+        },
         AgentType::Hermes => AcpAgentMeta {
             agent_type,
             name: "Hermes Agent",
@@ -393,6 +449,18 @@ mod tests {
             Some("22.19.0"),
         );
         assert_npx_version(AgentType::Cline, "3.0.29", "cline@3.0.29", None);
+        assert_npx_version(
+            AgentType::KimiCode,
+            "0.8.0",
+            "@moonshot-ai/kimi-code@0.8.0",
+            Some("24.15.0"),
+        );
+        assert_npx_version(
+            AgentType::MimoCode,
+            "0.1.0",
+            "@mimo-ai/cli@0.1.0",
+            Some("20.0.0"),
+        );
         assert_binary_version(AgentType::Codex, "0.16.0", "/releases/download/v0.16.0/");
         assert_binary_version(AgentType::OpenCode, "1.17.9", "/releases/download/v1.17.9/");
         assert_uvx_version(

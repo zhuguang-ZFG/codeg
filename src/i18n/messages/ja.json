@@ -2226,6 +2226,25 @@
         "submit": "送信",
         "submitError": "送信できませんでした。もう一度お試しください。"
       },
+      "planApproval": {
+        "titleFallback": "プラン承認",
+        "badge": "プラン",
+        "accept": "プランを承認",
+        "reject": "拒否",
+        "submitError": "送信できませんでした。もう一度お試しください。"
+      },
+      "cursorTask": {
+        "fallbackDescription": "サブエージェントタスクの更新",
+        "toastDescription": "サブエージェント: {subagent}",
+        "toastDescriptionWithDuration": "サブエージェント: {subagent} · {duration}"
+      },
+      "cursorGenerateImage": {
+        "fallbackDescription": "画像を生成しました",
+        "toastDescription": "画像生成が完了しました",
+        "toastDescriptionWithPath": "保存先: {path}",
+        "references": "参考画像 {count} 枚",
+        "openFile": "ファイルを開く"
+      },
       "feedbackCheckResult": {
         "count": "フィードバック {count} 件",
         "expand": "すべてのフィードバックを表示",
@@ -2506,6 +2525,12 @@
       "permissionRequestDesc": "エージェントが操作の権限を要求した時",
       "questionRequest": "エージェントからの質問",
       "questionRequestDesc": "エージェントが質問したとき",
+      "planApprovalRequest": "プラン承認",
+      "planApprovalRequestDesc": "Cursor がプランの承認を求めたとき",
+      "cursorTask": "サブエージェントタスク",
+      "cursorTaskDesc": "Cursor がサブエージェントタスクを報告したとき",
+      "cursorGenerateImage": "画像生成",
+      "cursorGenerateImageDesc": "Cursor が生成画像を報告したとき",
       "userPromptSent": "ユーザーメッセージ",
       "userPromptSentDesc": "メッセージを送信したとき（通知に本文が含まれます）",
       "saved": "イベントフィルターを更新しました。",

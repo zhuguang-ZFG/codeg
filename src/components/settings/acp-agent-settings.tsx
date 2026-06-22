@@ -2659,7 +2659,8 @@ export function buildVersionCheck(
   if (
     agent.distribution_type !== "binary" &&
     agent.distribution_type !== "npx" &&
-    agent.distribution_type !== "uvx"
+    agent.distribution_type !== "uvx" &&
+    agent.distribution_type !== "path"
   )
     return null
 
@@ -2672,7 +2673,9 @@ export function buildVersionCheck(
     { remoteVersion, localVersion }
   )
   const installAction: RunningActionKind =
-    agent.distribution_type === "binary" ? "download_binary" : "install_npx"
+    agent.distribution_type === "binary"
+      ? "download_binary"
+      : "install_npx"
   const upgradeAction: RunningActionKind =
     agent.distribution_type === "binary" ? "upgrade_binary" : "upgrade_npx"
   const uninstallAction: RunningActionKind =

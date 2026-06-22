@@ -46,7 +46,8 @@ import {
 } from "@/contexts/acp-connections-context"
 import { PermissionDialog } from "@/components/chat/permission-dialog"
 import { AskQuestionCard } from "@/components/chat/ask-question-card"
-import { AGENT_LABELS, type AgentType, type QuestionAnswer } from "@/lib/types"
+import { PlanApprovalCard } from "@/components/chat/plan-approval-card"
+import { AGENT_LABELS, type AgentType, type PlanAnswer, type QuestionAnswer } from "@/lib/types"
 
 interface Props {
   open: boolean
@@ -319,7 +320,7 @@ function SubAgentSessionBody({
   // raise a permission request. The parent card no longer answers it inline
   // (it only badges "awaiting approval"); this dialog is where the user
   // resolves it. Route the response through the CHILD connection id.
-  const { respondPermission, answerQuestion } = useAcpActions()
+  const { respondPermission, answerQuestion, answerPlan } = useAcpActions()
   const childPendingPermission = childConn?.pendingPermission ?? null
   const onRespondPermission = useCallback(
     (requestId: string, optionId: string) => {
@@ -343,6 +344,15 @@ function SubAgentSessionBody({
       return answerQuestion(childConnectionId, questionId, answer)
     },
     [childConnectionId, answerQuestion]
+  )
+
+  const childPendingPlan = childConn?.pendingPlan ?? null
+  const onAnswerPlan = useCallback(
+    (planId: string, answer: PlanAnswer) => {
+      if (!childConnectionId) return
+      return answerPlan(childConnectionId, planId, answer)
+    },
+    [childConnectionId, answerPlan]
   )
 
   return (
@@ -377,6 +387,13 @@ function SubAgentSessionBody({
             />
           </div>
         )}
+
+      {childConnectionId && childPendingPlan && (
+        <div className="border-b border-border px-4 py-3">
+          <PlanApprovalCard plan={childPendingPlan} onAnswer={onAnswerPlan} />
+        </div>
+      )}
+
       <div className="flex-1 min-h-0 px-4 py-3">
         <MessageListView
           conversationId={childConversationId}

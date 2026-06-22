@@ -35,6 +35,9 @@ fn default_enabled(agent_type: AgentType) -> bool {
             | AgentType::OpenClaw
             | AgentType::Cline
             | AgentType::Hermes
+            | AgentType::KimiCode
+            | AgentType::MimoCode
+            | AgentType::Cursor
     )
 }
 

@@ -2226,6 +2226,25 @@
         "submit": "提交",
         "submitError": "提交失敗，請重試。"
       },
+      "planApproval": {
+        "titleFallback": "計畫審批",
+        "badge": "計畫",
+        "accept": "接受計畫",
+        "reject": "拒絕",
+        "submitError": "提交失敗，請重試。"
+      },
+      "cursorTask": {
+        "fallbackDescription": "子智慧代理任務更新",
+        "toastDescription": "子智慧代理：{subagent}",
+        "toastDescriptionWithDuration": "子智慧代理：{subagent} · {duration}"
+      },
+      "cursorGenerateImage": {
+        "fallbackDescription": "圖片已生成",
+        "toastDescription": "圖片生成完成",
+        "toastDescriptionWithPath": "已儲存至 {path}",
+        "references": "{count} 張參考圖",
+        "openFile": "開啟檔案"
+      },
       "feedbackCheckResult": {
         "count": "{count} 則回饋",
         "expand": "展開全部回饋",
@@ -2506,6 +2525,12 @@
       "permissionRequestDesc": "智慧代理請求操作權限時",
       "questionRequest": "智慧代理提問",
       "questionRequestDesc": "當智慧代理向你提問時",
+      "planApprovalRequest": "計畫審批",
+      "planApprovalRequestDesc": "當 Cursor 提交計畫待審批時",
+      "cursorTask": "子智慧代理任務",
+      "cursorTaskDesc": "當 Cursor 回報子智慧代理任務更新時",
+      "cursorGenerateImage": "圖片生成",
+      "cursorGenerateImageDesc": "當 Cursor 回報生成圖片時",
       "userPromptSent": "使用者訊息",
       "userPromptSentDesc": "當你傳送訊息時——通知中會包含訊息內容",
       "saved": "事件篩選已更新。",

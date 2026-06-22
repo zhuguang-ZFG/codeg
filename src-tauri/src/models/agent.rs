@@ -11,6 +11,9 @@ pub enum AgentType {
     OpenClaw,
     Cline,
     Hermes,
+    KimiCode,
+    MimoCode,
+    Cursor,
 }
 
 impl fmt::Display for AgentType {
@@ -23,6 +26,9 @@ impl fmt::Display for AgentType {
             AgentType::OpenClaw => write!(f, "OpenClaw"),
             AgentType::Cline => write!(f, "Cline"),
             AgentType::Hermes => write!(f, "Hermes Agent"),
+            AgentType::KimiCode => write!(f, "Kimi Code"),
+            AgentType::MimoCode => write!(f, "MiMo Code"),
+            AgentType::Cursor => write!(f, "Cursor CLI"),
         }
     }
 }

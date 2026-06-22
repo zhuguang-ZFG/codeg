@@ -182,6 +182,8 @@ pub struct ConnectionManager {
     /// no cap, no cumulative growth; entries are removed on answer / cancel /
     /// connection teardown.
     pending_questions: Arc<Mutex<HashMap<String, PendingQuestionEntry>>>,
+    /// In-flight Cursor `cursor/create_plan` approvals, keyed by `plan_id`.
+    pending_plans: Arc<Mutex<HashMap<String, PendingPlanEntry>>>,
 }
 
 /// A parked `ask_user_question` awaiting its answer. The `sender` resolves the
@@ -191,6 +193,11 @@ struct PendingQuestionEntry {
     parent_connection_id: String,
     questions: Vec<QuestionSpec>,
     sender: tokio::sync::oneshot::Sender<QuestionOutcome>,
+}
+
+struct PendingPlanEntry {
+    parent_connection_id: String,
+    sender: tokio::sync::oneshot::Sender<serde_json::Value>,
 }
 
 impl Default for ConnectionManager {
@@ -208,6 +215,7 @@ impl ConnectionManager {
             delegation_injection: Arc::new(std::sync::OnceLock::new()),
             probe_locks: Arc::new(Mutex::new(HashMap::new())),
             pending_questions: Arc::new(Mutex::new(HashMap::new())),
+            pending_plans: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -220,6 +228,7 @@ impl ConnectionManager {
             delegation_injection: self.delegation_injection.clone(),
             probe_locks: self.probe_locks.clone(),
             pending_questions: self.pending_questions.clone(),
+            pending_plans: self.pending_plans.clone(),
         }
     }
 
@@ -245,6 +254,7 @@ impl ConnectionManager {
             delegation_injection: Arc::new(std::sync::OnceLock::new()),
             probe_locks: Arc::new(Mutex::new(HashMap::new())),
             pending_questions: Arc::new(Mutex::new(HashMap::new())),
+            pending_plans: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -2074,6 +2084,102 @@ impl ConnectionManager {
         }
     }
 
+    /// Register a Cursor `cursor/create_plan` approval on the parent connection.
+    pub async fn register_plan(
+        &self,
+        conn_id: &str,
+        request: crate::acp::cursor_ext::CursorCreatePlanRequest,
+    ) -> Option<crate::acp::cursor_ext::RegisteredPlan> {
+        let (state, emitter) = self.get_state_and_emitter(conn_id).await?;
+        let plan_id = uuid::Uuid::new_v4().to_string();
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        {
+            let mut reg = self.pending_plans.lock().await;
+            if reg.values().any(|e| e.parent_connection_id == conn_id) {
+                return None;
+            }
+            reg.insert(
+                plan_id.clone(),
+                PendingPlanEntry {
+                    parent_connection_id: conn_id.to_string(),
+                    sender: tx,
+                },
+            );
+        }
+        emit_with_state(
+            &state,
+            &emitter,
+            AcpEvent::PlanApprovalRequest {
+                plan_id: plan_id.clone(),
+                tool_call_id: request.tool_call_id.clone(),
+                name: request.name.clone(),
+                overview: request.overview.clone(),
+                plan: request.plan.clone(),
+                todos: request.todos.clone(),
+            },
+        )
+        .await;
+        Some(crate::acp::cursor_ext::RegisteredPlan {
+            plan_id,
+            answer_rx: rx,
+        })
+    }
+
+    pub async fn answer_plan(
+        &self,
+        conn_id: &str,
+        plan_id: &str,
+        answer: crate::acp::cursor_ext::PlanAnswer,
+    ) -> Result<(), AcpError> {
+        let _ = conn_id;
+        let entry = self.pending_plans.lock().await.remove(plan_id);
+        let Some(entry) = entry else {
+            return Ok(());
+        };
+        let response = crate::acp::cursor_ext::build_cursor_plan_response(&answer);
+        let _ = entry.sender.send(response);
+        if let Some((state, emitter)) = self.get_state_and_emitter(&entry.parent_connection_id).await
+        {
+            emit_with_state(
+                &state,
+                &emitter,
+                AcpEvent::PlanApprovalResolved {
+                    plan_id: plan_id.to_string(),
+                },
+            )
+            .await;
+        }
+        Ok(())
+    }
+
+    pub async fn cancel_plans_by_parent(&self, conn_id: &str) {
+        let drained: Vec<String> = {
+            let mut reg = self.pending_plans.lock().await;
+            let ids: Vec<String> = reg
+                .iter()
+                .filter(|(_, e)| e.parent_connection_id == conn_id)
+                .map(|(id, _)| id.clone())
+                .collect();
+            for id in &ids {
+                reg.remove(id);
+            }
+            ids
+        };
+        if drained.is_empty() {
+            return;
+        }
+        if let Some((state, emitter)) = self.get_state_and_emitter(conn_id).await {
+            for plan_id in drained {
+                emit_with_state(
+                    &state,
+                    &emitter,
+                    AcpEvent::PlanApprovalResolved { plan_id },
+                )
+                .await;
+            }
+        }
+    }
+
     /// Resolve a conversation_id to its currently-active connection id, if any.
     /// Used by the by-conversation snapshot endpoint and the LifecycleSubscriber.
     /// Per-session state is acquired via `read().await` to avoid the
@@ -2388,6 +2494,30 @@ impl SessionQuestionAccess for ConnectionManagerQuestionLookup {
     async fn cancel_questions_by_parent(&self, parent_connection_id: &str) {
         self.manager
             .cancel_questions_by_parent(parent_connection_id)
+            .await
+    }
+}
+
+#[derive(Clone)]
+pub struct ConnectionManagerPlanLookup {
+    pub manager: Arc<ConnectionManager>,
+}
+
+#[async_trait::async_trait]
+impl crate::acp::cursor_ext::SessionCursorPlanAccess for ConnectionManagerPlanLookup {
+    async fn register_plan(
+        &self,
+        parent_connection_id: &str,
+        request: crate::acp::cursor_ext::CursorCreatePlanRequest,
+    ) -> Option<crate::acp::cursor_ext::RegisteredPlan> {
+        self.manager
+            .register_plan(parent_connection_id, request)
+            .await
+    }
+
+    async fn cancel_plans_by_parent(&self, parent_connection_id: &str) {
+        self.manager
+            .cancel_plans_by_parent(parent_connection_id)
             .await
     }
 }
@@ -5128,6 +5258,144 @@ mod tests {
         assert!(first.answer_rx.await.is_ok(), "first ask resolves");
         // After resolve, a new ask is accepted again.
         assert!(mgr.register_question("cc2", q_spec()).await.is_some());
+    }
+
+    // --- cursor/create_plan: register / answer / cancel ------------------
+
+    fn plan_spec() -> crate::acp::cursor_ext::CursorCreatePlanRequest {
+        crate::acp::cursor_ext::CursorCreatePlanRequest {
+            tool_call_id: "tc-plan".into(),
+            name: Some("Auth refactor".into()),
+            overview: Some("Split modules".into()),
+            plan: "Step 1\nStep 2".into(),
+            todos: vec![],
+            is_project: false,
+            phases: vec![],
+        }
+    }
+
+    #[tokio::test]
+    async fn register_then_answer_plan_resolves_and_clears() {
+        let mgr = ConnectionManager::new();
+        mgr.insert_test_connection("cp", AgentType::Cursor, None, EventEmitter::Noop)
+            .await;
+        let reg = mgr
+            .register_plan("cp", plan_spec())
+            .await
+            .expect("registered");
+        assert!(mgr
+            .get_state("cp")
+            .await
+            .unwrap()
+            .read()
+            .await
+            .pending_plan
+            .is_some());
+
+        let answer = crate::acp::cursor_ext::PlanAnswer {
+            accepted: true,
+            reason: None,
+            cancelled: false,
+        };
+        mgr.answer_plan("cp", &reg.plan_id, answer)
+            .await
+            .unwrap();
+
+        let response = reg.answer_rx.await.expect("answer delivered");
+        assert_eq!(
+            response,
+            serde_json::json!({ "outcome": { "outcome": "accepted" } })
+        );
+        assert!(mgr
+            .get_state("cp")
+            .await
+            .unwrap()
+            .read()
+            .await
+            .pending_plan
+            .is_none());
+
+        mgr.answer_plan("cp", &reg.plan_id, Default::default())
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn cancel_plans_by_parent_drops_only_matching_connection() {
+        let mgr = ConnectionManager::new();
+        mgr.insert_test_connection("cpa", AgentType::Cursor, None, EventEmitter::Noop)
+            .await;
+        mgr.insert_test_connection("cpb", AgentType::Cursor, None, EventEmitter::Noop)
+            .await;
+        let reg_a = mgr.register_plan("cpa", plan_spec()).await.unwrap();
+        let reg_b = mgr.register_plan("cpb", plan_spec()).await.unwrap();
+
+        mgr.cancel_plans_by_parent("cpa").await;
+
+        assert!(reg_a.answer_rx.await.is_err());
+        assert!(mgr
+            .get_state("cpa")
+            .await
+            .unwrap()
+            .read()
+            .await
+            .pending_plan
+            .is_none());
+        assert!(mgr
+            .get_state("cpb")
+            .await
+            .unwrap()
+            .read()
+            .await
+            .pending_plan
+            .is_some());
+
+        mgr.answer_plan(
+            "cpb",
+            &reg_b.plan_id,
+            crate::acp::cursor_ext::PlanAnswer {
+                accepted: false,
+                reason: Some("Not now".into()),
+                cancelled: false,
+            },
+        )
+        .await
+        .unwrap();
+        assert!(reg_b.answer_rx.await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn register_plan_unknown_connection_is_none() {
+        let mgr = ConnectionManager::new();
+        assert!(mgr.register_plan("nope", plan_spec()).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn register_plan_refuses_second_concurrent_on_same_connection() {
+        let mgr = ConnectionManager::new();
+        mgr.insert_test_connection("cp2", AgentType::Cursor, None, EventEmitter::Noop)
+            .await;
+        let first = mgr
+            .register_plan("cp2", plan_spec())
+            .await
+            .expect("first registers");
+        assert!(
+            mgr.register_plan("cp2", plan_spec()).await.is_none(),
+            "second concurrent plan must be refused"
+        );
+        mgr.answer_plan(
+            "cp2",
+            &first.plan_id,
+            crate::acp::cursor_ext::PlanAnswer {
+                accepted: true,
+                reason: None,
+                cancelled: false,
+            },
+        )
+        .await
+        .unwrap();
+        assert!(first.answer_rx.await.is_ok(), "first plan resolves");
+        assert!(mgr.register_plan("cp2", plan_spec()).await.is_some());
     }
 
     #[tokio::test]

@@ -2121,6 +2121,10 @@ pub fn read_servers_for_agent_type(
         AgentType::OpenClaw => read_openclaw_servers(),
         AgentType::Cline => read_cline_servers(),
         AgentType::Hermes => read_hermes_servers(),
+        // ponytail: MCP configured in Kimi Code CLI (`kimi mcp`), not codeg settings.
+        AgentType::KimiCode => Ok(BTreeMap::new()),
+        AgentType::MimoCode => Ok(BTreeMap::new()),
+        AgentType::Cursor => Ok(BTreeMap::new()),
     }
 }
 

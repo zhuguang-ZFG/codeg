@@ -2226,6 +2226,25 @@
         "submit": "Enviar",
         "submitError": "Falha ao enviar. Tente novamente."
       },
+      "planApproval": {
+        "titleFallback": "Aprovação do plano",
+        "badge": "Plano",
+        "accept": "Aceitar plano",
+        "reject": "Rejeitar",
+        "submitError": "Não foi possível enviar. Tente novamente."
+      },
+      "cursorTask": {
+        "fallbackDescription": "Atualização de tarefa de subagente",
+        "toastDescription": "Subagente: {subagent}",
+        "toastDescriptionWithDuration": "Subagente: {subagent} · {duration}"
+      },
+      "cursorGenerateImage": {
+        "fallbackDescription": "Imagem gerada",
+        "toastDescription": "Geração de imagem concluída",
+        "toastDescriptionWithPath": "Salva em {path}",
+        "references": "{count} imagem(ns) de referência",
+        "openFile": "Abrir arquivo"
+      },
       "feedbackCheckResult": {
         "count": "{count, plural, =1 {1 comentário} other {# comentários}}",
         "expand": "Mostrar todos os comentários",
@@ -2506,6 +2525,12 @@
       "permissionRequestDesc": "Quando um agente solicita permissão para agir",
       "questionRequest": "Pergunta do agente",
       "questionRequestDesc": "Quando um agente faz uma pergunta",
+      "planApprovalRequest": "Aprovação do plano",
+      "planApprovalRequestDesc": "Quando o Cursor envia um plano para aprovação",
+      "cursorTask": "Tarefa de subagente",
+      "cursorTaskDesc": "Quando o Cursor reporta uma tarefa de subagente",
+      "cursorGenerateImage": "Imagem gerada",
+      "cursorGenerateImageDesc": "Quando o Cursor reporta uma imagem gerada",
       "userPromptSent": "Mensagem do usuário",
       "userPromptSentDesc": "Quando você envia uma mensagem (o texto da mensagem é incluído na notificação)",
       "saved": "Filtro de eventos atualizado.",

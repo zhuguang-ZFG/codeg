@@ -170,6 +170,9 @@ pub fn build_delegation_stack(
         questions: Arc::new(crate::acp::manager::ConnectionManagerQuestionLookup {
             manager: Arc::new(connection_manager.clone_ref()),
         }) as Arc<dyn crate::acp::question::SessionQuestionAccess>,
+        cursor_plans: Arc::new(crate::acp::manager::ConnectionManagerPlanLookup {
+            manager: Arc::new(connection_manager.clone_ref()),
+        }) as Arc<dyn crate::acp::cursor_ext::SessionCursorPlanAccess>,
     });
 
     (broker, tokens, socket_path, feedback, ask, sessions)

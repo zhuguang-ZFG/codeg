@@ -670,6 +670,11 @@
       "gatewayTokenHint": "可能な場合は平文トークンではなく token-file の使用を推奨します。openclaw CLI で設定してください。",
       "sessionKeyHint": "任意。gateway の session key を指定します。空欄の場合は分離されたセッションが自動割り当てされます。"
     },
+    "cliManaged": {
+      "kimi_code": "認証は Kimi CLI が管理します（`kimi` OAuth または KIMI_API_KEY）。検出された値を下に表示します。OAuth トークンは表示されません。",
+      "mimo_code": "認証は MiMo CLI が管理します（`mimo providers login` または MIMO_API_KEY / OPENAI_API_KEY）。検出された環境変数を下に表示します。",
+      "cursor": "認証は Cursor CLI が管理します（`agent login` または CURSOR_API_KEY）。検出された環境変数を下に表示します。"
+    },
     "hermes": {
       "configManagement": "Hermes 設定",
       "configDescription": "Hermes は認証情報を ~/.hermes/.env に、設定を ~/.hermes/config.yaml に独自に管理します。プロバイダーを選択し、API キーとモデルを設定してください。codeg が両方のファイルを書き込みます。",

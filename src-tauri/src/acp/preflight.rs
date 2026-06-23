@@ -57,7 +57,7 @@ pub fn clear_npm_env_cache() {
 pub async fn run_preflight(agent_type: AgentType) -> PreflightResult {
     let meta = registry::get_agent_meta(agent_type);
     debug_assert_eq!(meta.agent_type, agent_type);
-    let checks = match &meta.distribution {
+    let mut checks = match &meta.distribution {
         AgentDistribution::Npx { node_required, .. } => check_npm_environment(*node_required).await,
         AgentDistribution::Binary {
             version,
@@ -72,6 +72,10 @@ pub async fn run_preflight(agent_type: AgentType) -> PreflightResult {
         } => check_uv_environment(*uv_required, *system_cmd).await,
         AgentDistribution::Path { cmd, .. } => check_path_environment(cmd).await,
     };
+
+    if let Some(auth) = cli_auth_check(agent_type).await {
+        checks.push(auth);
+    }
 
     let passed = checks
         .iter()
@@ -604,4 +608,208 @@ async fn check_binary_environment(
     }
 
     checks
+}
+
+/// CLI-managed agents (Kimi / MiMo / Cursor) authenticate outside Codeg's env
+/// editor. Surface auth readiness as an extra preflight row.
+async fn cli_auth_check(agent_type: AgentType) -> Option<CheckItem> {
+    match agent_type {
+        AgentType::KimiCode => Some(check_kimi_auth().await),
+        AgentType::MimoCode => Some(check_mimo_auth().await),
+        AgentType::Cursor => Some(check_cursor_auth().await),
+        _ => None,
+    }
+}
+
+async fn check_kimi_auth() -> CheckItem {
+    let label = "Authentication".to_string();
+    if std::env::var("KIMI_API_KEY")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .is_some()
+    {
+        return CheckItem {
+            check_id: "cli_auth".into(),
+            label,
+            status: CheckStatus::Pass,
+            message: "KIMI_API_KEY is set in the environment".into(),
+            fixes: vec![],
+        };
+    }
+    if kimi_config_api_key().is_some() {
+        return CheckItem {
+            check_id: "cli_auth".into(),
+            label,
+            status: CheckStatus::Pass,
+            message: "API key configured in ~/.kimi/config.toml".into(),
+            fixes: vec![],
+        };
+    }
+    if kimi_oauth_configured().await {
+        return CheckItem {
+            check_id: "cli_auth".into(),
+            label,
+            status: CheckStatus::Pass,
+            message: "OAuth configured for managed:kimi-code (via kimi CLI)".into(),
+            fixes: vec![],
+        };
+    }
+    CheckItem {
+        check_id: "cli_auth".into(),
+        label,
+        status: CheckStatus::Warn,
+        message: "No Kimi credentials detected. Run `kimi` in a terminal to log in, or set KIMI_API_KEY."
+            .into(),
+        fixes: vec![],
+    }
+}
+
+async fn check_mimo_auth() -> CheckItem {
+    let label = "Authentication".to_string();
+    if std::env::var("MIMO_API_KEY")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .is_some()
+        || std::env::var("OPENAI_API_KEY")
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+            .is_some()
+    {
+        return CheckItem {
+            check_id: "cli_auth".into(),
+            label,
+            status: CheckStatus::Pass,
+            message: "API key env var detected (MIMO_API_KEY or OPENAI_API_KEY)".into(),
+            fixes: vec![],
+        };
+    }
+    if which::which("mimo").is_ok() {
+        if let Ok(output) = crate::process::tokio_command("mimo")
+            .args(["providers", "whoami"])
+            .output()
+            .await
+        {
+            if output.status.success() {
+                let body = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !body.is_empty() && !body.to_ascii_lowercase().contains("not logged") {
+                    return CheckItem {
+                        check_id: "cli_auth".into(),
+                        label,
+                        status: CheckStatus::Pass,
+                        message: format!("MiMo CLI authenticated: {body}"),
+                        fixes: vec![],
+                    };
+                }
+            }
+        }
+    }
+    CheckItem {
+        check_id: "cli_auth".into(),
+        label,
+        status: CheckStatus::Warn,
+        message: "No MiMo credentials detected. Run `mimo providers login` in a terminal.".into(),
+        fixes: vec![],
+    }
+}
+
+async fn check_cursor_auth() -> CheckItem {
+    let label = "Authentication".to_string();
+    if std::env::var("CURSOR_API_KEY")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .is_some()
+    {
+        return CheckItem {
+            check_id: "cli_auth".into(),
+            label,
+            status: CheckStatus::Pass,
+            message: "CURSOR_API_KEY is set in the environment".into(),
+            fixes: vec![],
+        };
+    }
+    if which::which("agent").is_ok() {
+        return CheckItem {
+            check_id: "cli_auth".into(),
+            label,
+            status: CheckStatus::Pass,
+            message: "Cursor CLI (`agent`) is on PATH — use `agent login` if sessions fail to authenticate"
+                .into(),
+            fixes: vec![],
+        };
+    }
+    CheckItem {
+        check_id: "cli_auth".into(),
+        label,
+        status: CheckStatus::Warn,
+        message: "Cursor CLI not found on PATH. Install via Cursor or set CURSOR_API_KEY.".into(),
+        fixes: vec![FixAction {
+            label: "Install Cursor CLI".into(),
+            kind: FixActionKind::OpenUrl,
+            payload: "https://cursor.com/docs/cli/overview".into(),
+        }],
+    }
+}
+
+fn kimi_config_path() -> std::path::PathBuf {
+    dirs::home_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join(".kimi")
+        .join("config.toml")
+}
+
+fn kimi_config_api_key() -> Option<String> {
+    let raw = std::fs::read_to_string(kimi_config_path()).ok()?;
+    let table: toml::Value = toml::from_str(&raw).ok()?;
+    let key = table
+        .get("providers")?
+        .get("managed:kimi-code")?
+        .get("api_key")?
+        .as_str()?
+        .trim();
+    if key.is_empty() {
+        None
+    } else {
+        Some(key.to_string())
+    }
+}
+
+async fn kimi_oauth_configured() -> bool {
+    if let Ok(path) = which::which("kimi") {
+        if let Ok(output) = crate::process::tokio_command(path)
+            .args(["provider", "list"])
+            .output()
+            .await
+        {
+            if output.status.success() {
+                let body = String::from_utf8_lossy(&output.stdout);
+                if body.contains("managed:kimi-code") && body.contains("source=oauth") {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_node_version_strips_pre_release() {
+        assert_eq!(parse_node_version("v24.14.0"), Some((24, 14, 0)));
+        assert_eq!(parse_node_version("22.19.0-nightly"), Some((22, 19, 0)));
+    }
+
+    #[test]
+    fn kimi_node_requirement_passes_on_node_24_14() {
+        let check = build_node_version_check(Some("v24.14.0"), "22.19.0");
+        assert!(matches!(check.status, CheckStatus::Pass));
+    }
+
+    #[test]
+    fn kimi_node_requirement_fails_below_22_19() {
+        let check = build_node_version_check(Some("v20.10.0"), "22.19.0");
+        assert!(matches!(check.status, CheckStatus::Fail));
+    }
 }

@@ -6150,6 +6150,13 @@ export function AcpAgentSettings() {
 
                 <div className="space-y-2">
                   <label className="text-xs font-medium">{t("envVars")}</label>
+                  {(selectedAgent.agent_type === "kimi_code" ||
+                    selectedAgent.agent_type === "mimo_code" ||
+                    selectedAgent.agent_type === "cursor") && (
+                    <p className="text-[11px] text-muted-foreground">
+                      {t(`cliManaged.${selectedAgent.agent_type}`)}
+                    </p>
+                  )}
                   <div className="relative group">
                     <Textarea
                       value={selectedDraft.envText}

@@ -670,6 +670,11 @@
       "gatewayTokenHint": "يُفضّل استخدام token-file بدل الرمز النصي متى أمكن؛ قم بالإعداد عبر openclaw CLI.",
       "sessionKeyHint": "اختياري. حدّد مفتاح جلسة gateway؛ واتركه فارغًا للتعيين التلقائي لجلسة معزولة."
     },
+    "cliManaged": {
+      "kimi_code": "تُدار المصادقة عبر Kimi CLI (OAuth عبر `kimi` أو KIMI_API_KEY). تظهر القيم المكتشفة أدناه؛ لا تُعرض رموز OAuth.",
+      "mimo_code": "تُدار المصادقة عبر MiMo CLI (`mimo providers login` أو MIMO_API_KEY / OPENAI_API_KEY). تظهر متغيرات البيئة المكتشفة أدناه.",
+      "cursor": "تُدار المصادقة عبر Cursor CLI (`agent login` أو CURSOR_API_KEY). تظهر متغيرات البيئة المكتشفة أدناه."
+    },
     "hermes": {
       "configManagement": "تكوين Hermes",
       "configDescription": "يدير Hermes بيانات اعتماده الخاصة في ~/.hermes/.env والإعدادات في ~/.hermes/config.yaml. اختر مزوّدًا، ثم عيّن مفتاح API والنموذج — وسيكتب codeg كلا الملفين نيابةً عنك.",

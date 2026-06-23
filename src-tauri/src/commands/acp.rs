@@ -1034,6 +1034,95 @@ fn home_dir_or_default() -> PathBuf {
     dirs::home_dir().unwrap_or_else(|| PathBuf::from("."))
 }
 
+fn merge_process_env_if_missing(env: &mut BTreeMap<String, String>, keys: &[&str]) {
+    for key in keys {
+        if env.contains_key(*key) {
+            continue;
+        }
+        if let Ok(value) = std::env::var(key) {
+            let trimmed = value.trim();
+            if !trimmed.is_empty() {
+                env.insert(key.to_string(), trimmed.to_string());
+            }
+        }
+    }
+}
+
+fn read_kimi_native_env() -> BTreeMap<String, String> {
+    let mut out = BTreeMap::new();
+    let path = home_dir_or_default().join(".kimi").join("config.toml");
+    let Ok(raw) = fs::read_to_string(path) else {
+        return out;
+    };
+    let Ok(table) = toml::from_str::<toml::Value>(&raw) else {
+        return out;
+    };
+    let Some(provider) = table
+        .get("providers")
+        .and_then(|v| v.get("managed:kimi-code"))
+    else {
+        return out;
+    };
+    if let Some(base_url) = provider
+        .get("base_url")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+    {
+        out.insert("KIMI_BASE_URL".to_string(), base_url.to_string());
+    }
+    if let Some(api_key) = provider
+        .get("api_key")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+    {
+        out.insert("KIMI_API_KEY".to_string(), api_key.to_string());
+    }
+    out
+}
+
+/// Merge CLI-native and process env into the settings display map (read-only
+/// hints for self-managed agents; DB env still wins on key collision).
+fn merge_cli_managed_display_env(agent_type: AgentType, env: &mut BTreeMap<String, String>) {
+    match agent_type {
+        AgentType::KimiCode => {
+            merge_process_env_if_missing(
+                env,
+                &["KIMI_API_KEY", "KIMI_BASE_URL", "KIMI_CN_API_KEY"],
+            );
+            for (key, value) in read_kimi_native_env() {
+                env.entry(key).or_insert(value);
+            }
+            if env.get("KIMI_API_KEY").is_none() {
+                if let Ok(path) = which::which("kimi") {
+                    if let Ok(output) = std::process::Command::new(path)
+                        .args(["provider", "list"])
+                        .output()
+                    {
+                        if output.status.success() {
+                            let body = String::from_utf8_lossy(&output.stdout);
+                            if body.contains("managed:kimi-code") && body.contains("source=oauth") {
+                                env.insert(
+                                    "KIMI_CODE_AUTH".to_string(),
+                                    "oauth (managed:kimi-code)".to_string(),
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        AgentType::MimoCode => {
+            merge_process_env_if_missing(env, &["MIMO_API_KEY", "OPENAI_API_KEY"]);
+        }
+        AgentType::Cursor => {
+            merge_process_env_if_missing(env, &["CURSOR_API_KEY"]);
+        }
+        _ => {}
+    }
+}
+
 fn codex_home_dir() -> PathBuf {
     let configured = std::env::var("CODEX_HOME").ok().and_then(|raw| {
         let trimmed = raw.trim();
@@ -4622,6 +4711,7 @@ pub(crate) async fn acp_list_agents_core(db: &AppDatabase) -> Result<Vec<AcpAgen
                 }
             }
         }
+        merge_cli_managed_display_env(agent_type, &mut env);
         let sort_order = setting.map(|m| m.sort_order).unwrap_or(idx as i32);
         // Persist detected version to DB for binary/path agents (npx written during install/upgrade)
         if dist_type == "binary" || dist_type == "path" {

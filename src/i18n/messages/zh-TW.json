@@ -670,6 +670,11 @@
       "gatewayTokenHint": "建議使用 token-file 取代明文 Token，可透過 openclaw 命令列配置。",
       "sessionKeyHint": "可選。指定 Gateway Session Key，留空則自動分配隔離會話。"
     },
+    "cliManaged": {
+      "kimi_code": "認證由 Kimi CLI 管理（`kimi` OAuth 或 KIMI_API_KEY）。下方顯示偵測到的變數；OAuth 令牌不會展示。",
+      "mimo_code": "認證由 MiMo CLI 管理（`mimo providers login` 或 MIMO_API_KEY / OPENAI_API_KEY）。下方顯示偵測到的環境變數。",
+      "cursor": "認證由 Cursor CLI 管理（`agent login` 或 CURSOR_API_KEY）。下方顯示偵測到的環境變數。"
+    },
     "hermes": {
       "configManagement": "Hermes 配置",
       "configDescription": "Hermes 在 ~/.hermes/.env 中管理自己的憑證，在 ~/.hermes/config.yaml 中管理設定。選擇一個供應商，然後設定 API 金鑰與模型——codeg 會替你寫入這兩個檔案。",

@@ -293,7 +293,7 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
                 cmd: "kimi",
                 args: &["acp"],
                 env: &[],
-                node_required: Some("24.15.0"),
+                node_required: Some("22.19.0"),
             },
         },
         AgentType::MimoCode => AcpAgentMeta {
@@ -453,7 +453,7 @@ mod tests {
             AgentType::KimiCode,
             "0.8.0",
             "@moonshot-ai/kimi-code@0.8.0",
-            Some("24.15.0"),
+            Some("22.19.0"),
         );
         assert_npx_version(
             AgentType::MimoCode,

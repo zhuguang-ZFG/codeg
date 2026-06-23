@@ -670,6 +670,11 @@
       "gatewayTokenHint": "Usa token-file en lugar de token en texto plano cuando sea posible; configúralo con el CLI de openclaw.",
       "sessionKeyHint": "Opcional. Especifica la session key del gateway; si se deja vacío se asigna automáticamente una sesión aislada."
     },
+    "cliManaged": {
+      "kimi_code": "La autenticación la gestiona Kimi CLI (OAuth con `kimi` o KIMI_API_KEY). Los valores detectados aparecen abajo; los tokens OAuth no se muestran.",
+      "mimo_code": "La autenticación la gestiona MiMo CLI (`mimo providers login` o MIMO_API_KEY / OPENAI_API_KEY). Las variables detectadas aparecen abajo.",
+      "cursor": "La autenticación la gestiona Cursor CLI (`agent login` o CURSOR_API_KEY). Las variables detectadas aparecen abajo."
+    },
     "hermes": {
       "configManagement": "Configuración de Hermes",
       "configDescription": "Hermes gestiona sus propias credenciales en ~/.hermes/.env y los ajustes en ~/.hermes/config.yaml. Elige un proveedor y luego establece la clave de API y el modelo: codeg escribe ambos archivos por ti.",
